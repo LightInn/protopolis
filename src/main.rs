@@ -9,10 +9,11 @@ mod utils;
 mod world;
 
 #[tokio::main]
-async fn main() {
+// add debug argument to the main function that can be passed to the program
+async fn main(debug: bool) {
     // Initialisation
     let ollama = Ollama::default();
-    let mut world = world::World::new(ollama);
+    let mut world = world::World::new(ollama, debug);
 
     // Configuration initiale
     world.add_agent(agent::Agent::new(1, "Alice", "optimistic"));
