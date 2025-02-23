@@ -75,12 +75,13 @@ impl Agent {
     /// Traite les messages reçus et génère une réponse
     pub async fn process_messages(&mut self, ollama: &Ollama) -> Option<Message> {
         // Récupération des messages
-        let messages = &mut self.message_queue.drain(..).collect();
+        let messages = &mut self.message_queue.into_iter().collect();
 
         // Écoute des messages
         self.listen(&messages);
 
         // Réflexion sur les messages reçus
+        // todo : ne fait rien du tout pour l'instant
         self.reflect();
 
         // Génération d'une réponse
@@ -94,7 +95,7 @@ impl Agent {
                 "[Cycle {}] Message de {}: {}",
                 message.timestamp, message.sender, message.content
             ));
-            self.conversation.push_back(message.clone());
+            // self.conversation.push_back(message.clone());
 
             // Log coloré pour l'écoute
             println!(
@@ -228,7 +229,7 @@ impl Agent {
     fn conversation_history(&self) -> String {
         self.conversation
             .iter()
-            .map(|msg| format!("{}: {}", msg.sender, msg.content))
+            .map(|msg| format!("{:?}: {}", msg.role, msg.content))
             .collect::<Vec<String>>()
             .join("\n")
     }
