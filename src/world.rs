@@ -1,11 +1,13 @@
 // world.rs
-use colored::*;
 use crate::agent::{Agent, Message};
+use crate::utils;
+use colored::*;
 use ollama_rs::Ollama;
 use serde_json::Value;
 use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
-use crate::utils;
+use rand::rng;
+use rand::seq::SliceRandom;
 
 /// Représente le monde dans lequel les agents évoluent
 pub struct World {
@@ -21,11 +23,13 @@ pub struct World {
     current_topic: String,
     /// Mémoire globale du monde (pour partager des informations entre agents)
     global_memory: HashMap<String, Value>,
+    /// Mode de débogage
+    pub debug: bool,
 }
 
 impl World {
     /// Crée une nouvelle instance du monde
-    pub fn new(ollama: Ollama) -> Self {
+    pub fn new(ollama: Ollama, debug: bool) -> Self {
         Self {
             agents: vec![],
             message_queue: vec![],
@@ -33,6 +37,7 @@ impl World {
             ollama,
             current_topic: String::new(),
             global_memory: HashMap::new(),
+            debug,
         }
     }
 
@@ -72,11 +77,18 @@ impl World {
             // Mise à jour de l'état du monde
             self.update_world_state();
 
+
+            // todo : les agents vont processer les messages eux meme
             // Traitement des messages
             self.process_messages().await;
 
+            // shuffle agents to randomize the order of the agents
+            self.agents.shuffle(&mut rng());
+
             // Mise à jour des agents
+            // todo : les agents devraient etre mis a jour en parallele / shuffler
             for agent in &mut self.agents {
+                agent.process_messages().await;
                 agent.update_world_state(self.iteration);
                 println!("debug his memory: {:?}", agent.memory);
                 println!("debug his conversation: {:?}", agent.conversation);
@@ -106,7 +118,7 @@ impl World {
         let mut new_responses = Vec::new();
 
         for agent in &mut self.agents {
-            if let Some(response) = agent.process_messages(&messages, &self.ollama).await {
+            if let Some(response) = agent.process_messages(&self.ollama).await {
                 println!("[{}] {}", response.sender, response.content);
                 new_responses.push(response);
             }
@@ -118,7 +130,6 @@ impl World {
 
     /// Diffuse un message à tous les agents
     fn broadcast_message(&mut self, message: Message, radius: i32, sender: &Agent) {
-
         // todo : la message_queue devraits etre par agent, pour que chaque agent puisse avoir sa propre file de message
         // boradcast message to all agents inside the radius
         let sender_position = &sender.position;
@@ -128,7 +139,6 @@ impl World {
                 agent.message_queue.push_back(message.clone());
             }
         }
-
     }
 
     fn broadcast_system_message(&mut self, message: Message) {
@@ -149,7 +159,10 @@ impl World {
         summary.insert("iteration".to_string(), Value::from(self.iteration));
 
         // Correction ici : utiliser `self.current_topic.as_str()` pour convertir en &str
-        summary.insert("topic".to_string(), Value::from(self.current_topic.as_str()));
+        summary.insert(
+            "topic".to_string(),
+            Value::from(self.current_topic.as_str()),
+        );
 
         // Ajouter des informations des agents
         for agent in &self.agents {
@@ -160,7 +173,6 @@ impl World {
         }
 
         self.global_memory = summary;
-
     }
 
     /// Sauvegarde l'état actuel du monde
@@ -207,7 +219,7 @@ mod tests {
         let ollama = Ollama::default();
         let mut world = World::new(ollama);
 
-        world.add_agent(Agent::new(1, "Alice", "optimiste"));
+        world.add_agent(Agent::new(1, "Alice", "optimistic"));
         world.add_agent(Agent::new(2, "Bob", "sceptique"));
 
         assert_eq!(world.agents.len(), 2);
