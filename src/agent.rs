@@ -20,13 +20,13 @@ pub struct Agent {
     /// But actuel de l'agent
     pub current_goal: String,
     /// Historique des conversations
-    pub conversation: VecDeque<Message>,
+    pub conversation:Vec<ChatMessage>,
     /// Dernière action effectuée
     pub last_action: String,
 
-    // conv channel
-    pub conv_channel: Vec<ChatMessage>
+    pub position: Coord,
 
+    pub message_queue: VecDeque<Message>,
 }
 
 /// Représente un message échangé entre agents
@@ -34,10 +34,24 @@ pub struct Agent {
 pub struct Message {
     /// Nom de l'expéditeur
     pub sender: String,
+    /// Nom du destinataire
+    pub recipient: String,
     /// Contenu du message
     pub content: String,
     /// Timestamp du message
     pub timestamp: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Coord {
+    pub x: i32,
+    pub y: i32
+}
+
+impl Coord {
+    pub(crate) fn distance_square(&self, p0: &Coord) -> i32 {
+        ((self.x - p0.x).pow(2) + (self.y - p0.y).pow(2))
+    }
 }
 
 impl Agent {
@@ -52,6 +66,9 @@ impl Agent {
             conversation: VecDeque::new(),
             last_action: "Initialized".to_string(),
             conv_channel: Default::default(),
+
+            // todo : quel vitesse pour les deplacements ? ils ne penses pas assez vite pour se deplacer normalement, et les teleporté casserais l'intimité de la conversation
+            position : Coord { x: 0, y: 0 }
         }
     }
 
@@ -286,6 +303,7 @@ mod tests {
         let mut agent = Agent::new(1, "Alice", "optimiste");
         let messages = vec![Message {
             sender: "Bob".to_string(),
+            recipient: "Alice".to_string(),
             content: "Bonjour".to_string(),
             timestamp: 1,
         }];
