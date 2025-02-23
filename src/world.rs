@@ -5,6 +5,7 @@ use ollama_rs::Ollama;
 use serde_json::Value;
 use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
+use crate::utils;
 
 /// Représente le monde dans lequel les agents évoluent
 pub struct World {
@@ -41,11 +42,15 @@ impl World {
     }
 
     /// Définit le thème initial de la discussion
-    pub fn set_initial_topic(&mut self, topic: &str) {
-        self.current_topic = topic.to_string();
-        self.broadcast_message(Message {
-            sender: "Système".to_string(),
-            content: format!("Nouveau thème de discussion : {}", topic),
+    pub fn set_initial_topic(&mut self) {
+        // Entrée utilisateur pour le thème
+        let theme = utils::get_user_input("World Goal:");
+
+        self.current_topic = theme.to_string();
+        self.broadcast_system_message(Message {
+            sender: "System".to_string(),
+            recipient: "Everybody".to_string(),
+            content: format!("World goal: {}", theme),
             timestamp: self.iteration,
         });
     }
@@ -57,8 +62,8 @@ impl World {
 
     /// Boucle principale de simulation
     pub async fn run(&mut self) {
-        println!("Démarrage de la simulation...");
-        println!("Thème actuel : {}", self.current_topic);
+        println!("Simulation Starting...");
+        println!("Topic: {}", self.current_topic);
 
         while self.iteration < 20 {
             self.iteration += 1;
@@ -112,8 +117,24 @@ impl World {
     }
 
     /// Diffuse un message à tous les agents
-    fn broadcast_message(&mut self, message: Message) {
-        self.message_queue.push(message);
+    fn broadcast_message(&mut self, message: Message, radius: i32, sender: &Agent) {
+
+        // todo : la message_queue devraits etre par agent, pour que chaque agent puisse avoir sa propre file de message
+        // boradcast message to all agents inside the radius
+        let sender_position = &sender.position;
+
+        for agent in &mut self.agents {
+            if agent.position.distance_square(sender_position) <= radius {
+                agent.message_queue.push_back(message.clone());
+            }
+        }
+
+    }
+
+    fn broadcast_system_message(&mut self, message: Message) {
+        for agent in &mut self.agents {
+            agent.message_queue.push_back(message.clone());
+        }
     }
 
     /// Synthétise la mémoire globale
