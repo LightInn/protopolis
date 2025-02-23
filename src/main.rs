@@ -15,12 +15,10 @@ async fn main() {
     let mut world = world::World::new(ollama);
 
     // Configuration initiale
-    world.add_agent(agent::Agent::new(1, "Alice", "optimiste"));
+    world.add_agent(agent::Agent::new(1, "Alice", "optimistic"));
     // world.add_agent(agent::Agent::new(2, "Bob", "sceptique"));
 
-    // Entrée utilisateur pour le thème
-    let theme = utils::get_user_input("Entrez le thème de la discussion:");
-    world.set_initial_topic(&theme);
+    world.set_initial_topic();
 
     // Lancement de la simulation
     world.run().await;
