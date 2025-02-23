@@ -5,6 +5,7 @@ use ollama_rs::{generation::completion::request::GenerationRequest, Ollama};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::VecDeque;
+use crate::world::World;
 
 /// Represent an intelligent agent with a personality and abilities
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -69,28 +70,39 @@ impl Agent {
             // todo : quel vitesse pour les deplacements ? ils ne penses pas assez vite pour se deplacer normalement, et les teleporté casserais l'intimité de la conversation
             position: Coord { x: 0, y: 0 },
             message_queue: Default::default(),
+            world: None,
         }
     }
 
-    /// Traite les messages reçus et génère une réponse
-    pub async fn process_messages(&mut self, ollama: &Ollama) -> Option<Message> {
-        // Récupération des messages
-        let messages = &mut self.message_queue.into_iter().collect();
+    pub fn set_world(&mut self, world: &World) {
+        self.world = Some(&world);
+    }
 
-        // Écoute des messages
-        self.listen(&messages);
+    /// Traite les messages reçus et génère une réponse
+    pub async fn process_messages(&mut self, ollama: &Ollama, broadcast_callback: Option<Box<dyn Fn(Message, i32, &Agent)>>) {
+        // Écoute des messages incoming
+        self.listen();
 
         // Réflexion sur les messages reçus
         // todo : ne fait rien du tout pour l'instant
         self.reflect();
 
         // Génération d'une réponse
-        self.generate_response(ollama).await.ok()
+        let message = self.generate_response(ollama).await.ok();
+        // Appel de la callback si présente
+        if let Some(callback) = &broadcast_callback {
+            callback(
+                message.unwrap(),
+                1,
+                self,
+            );
+        }
     }
 
     /// Écoute les messages et les ajoute à la mémoire
-    fn listen(&mut self, messages: &[Message]) {
-        for message in messages {
+    fn listen(&mut self) {
+        // pop front from the queue
+        for message in self.message_queue.drain(..) {
             self.memory.push(format!(
                 "[Cycle {}] Message de {}: {}",
                 message.timestamp, message.sender, message.content
@@ -159,12 +171,18 @@ impl Agent {
                     parsed.bright_white()
                 );
 
-                return Ok(Message {
+
+                let message = Message {
                     sender: self.name.clone(),
                     recipient: "".to_string(),
                     content: parsed,
-                    timestamp: 0, // Le monde mettra à jour le timestamp
-                });
+                    timestamp: 0,
+                };
+
+
+
+
+                return Ok(message);
             }
 
             retries -= 1;
