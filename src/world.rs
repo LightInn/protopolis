@@ -8,9 +8,11 @@ use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
 use rand::rng;
 use rand::seq::SliceRandom;
+use serde::{Deserialize, Serialize};
 
 /// Représente le monde dans lequel les agents évoluent
-pub struct World {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct World{
     /// Liste des agents actifs dans le monde
     agents: Vec<Agent>,
     /// File d'attente des messages à traiter
@@ -42,8 +44,11 @@ impl World {
     }
 
     /// Ajoute un agent au monde
-    pub fn add_agent(&mut self, agent: Agent) {
+    pub fn add_agent(&mut self, mut agent: Agent) {
+
+        agent.set_world(self);
         self.agents.push(agent);
+
     }
 
     /// Définit le thème initial de la discussion
@@ -80,15 +85,18 @@ impl World {
 
             // todo : les agents vont processer les messages eux meme
             // Traitement des messages
-            self.process_messages().await;
+            // self.process_messages().await;
 
             // shuffle agents to randomize the order of the agents
             self.agents.shuffle(&mut rng());
 
+
+            let broadcast_callback = self.get_broadcast_callback();
+
             // Mise à jour des agents
             // todo : les agents devraient etre mis a jour en parallele / shuffler
             for agent in &mut self.agents {
-                agent.process_messages().await;
+                agent.process_messages(&self.ollama, broadcast_callback.clone() ).await;
                 agent.update_world_state(self.iteration);
                 println!("debug his memory: {:?}", agent.memory);
                 println!("debug his conversation: {:?}", agent.conversation);
@@ -109,25 +117,6 @@ impl World {
         }
     }
 
-    /// Traite les messages en attente
-    async fn process_messages(&mut self) {
-        // Distribuer les messages actuels
-        let messages = std::mem::take(&mut self.message_queue);
-
-        // Collecter les nouvelles réponses
-        let mut new_responses = Vec::new();
-
-        for agent in &mut self.agents {
-            if let Some(response) = agent.process_messages(&self.ollama).await {
-                println!("[{}] {}", response.sender, response.content);
-                new_responses.push(response);
-            }
-        }
-
-        // Ajouter les nouvelles réponses à la file d'attente
-        self.message_queue = new_responses;
-    }
-
     /// Diffuse un message à tous les agents
     fn broadcast_message(&mut self, message: Message, radius: i32, sender: &Agent) {
         // todo : la message_queue devraits etre par agent, pour que chaque agent puisse avoir sa propre file de message
@@ -145,6 +134,14 @@ impl World {
         for agent in &mut self.agents {
             agent.message_queue.push_back(message.clone());
         }
+    }
+
+
+    // derive clone
+    fn get_broadcast_callback(&mut self) -> Option<Box<dyn Fn(Message, i32, &Agent)>> {
+        Some(Box::new(|msg, code, agent| {
+            println!("Callback: {} {} {}", msg.content, code, agent.name);
+        }))
     }
 
     /// Synthétise la mémoire globale

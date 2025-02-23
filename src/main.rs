@@ -19,7 +19,7 @@ async fn main() {
 
     // Configuration initiale
     world.add_agent(agent::Agent::new(1, "Alice", "optimistic"));
-    // world.add_agent(agent::Agent::new(2, "Bob", "sceptique"));
+    world.add_agent(agent::Agent::new(2, "Bob", "sceptique"));
 
     world.set_initial_topic();
 
