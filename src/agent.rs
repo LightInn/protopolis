@@ -79,9 +79,14 @@ impl Agent {
     /// Traite les messages reçus et génère une réponse
     pub async fn process_messages(
         &mut self,
-        messages: &[Message],
         ollama: &Ollama,
     ) -> Option<Message> {
+
+        // Récupération des messages
+        let messages = self.message_queue.drain(..).collect::<Vec<Message>();
+
+
+
         // Écoute des messages
         self.listen(messages);
 
@@ -292,15 +297,15 @@ mod tests {
 
     #[test]
     fn test_agent_creation() {
-        let agent = Agent::new(1, "Alice", "optimiste");
+        let agent = Agent::new(1, "Alice", "optimistic");
         assert_eq!(agent.name, "Alice");
-        assert_eq!(agent.personality, "optimiste");
+        assert_eq!(agent.personality, "optimistic");
         assert_eq!(agent.memory.len(), 0);
     }
 
     #[test]
     fn test_listen() {
-        let mut agent = Agent::new(1, "Alice", "optimiste");
+        let mut agent = Agent::new(1, "Alice", "optimistic");
         let messages = vec![Message {
             sender: "Bob".to_string(),
             recipient: "Alice".to_string(),
@@ -316,7 +321,7 @@ mod tests {
     #[tokio::test]
     async fn test_response_generation() {
         let ollama = Ollama::default();
-        let mut agent = Agent::new(1, "Alice", "optimiste");
+        let mut agent = Agent::new(1, "Alice", "optimistic");
 
         // Test avec un mock serait préférable ici
         let result = agent.generate_response(&ollama).await;
