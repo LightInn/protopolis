@@ -1,51 +1,51 @@
 // agent.rs
 use colored::Colorize;
+use ollama_rs::generation::chat::ChatMessage;
 use ollama_rs::{generation::completion::request::GenerationRequest, Ollama};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::VecDeque;
-use ollama_rs::generation::chat::ChatMessage;
 
-/// Représente un agent intelligent avec une personnalité et des capacités
+/// Represent an intelligent agent with a personality and abilities
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Agent {
-    /// Identifiant unique de l'agent
+    /// Unique identifier of the agent
     pub id: u32,
-    /// Nom de l'agent
+    /// Agent's name
     pub name: String,
-    /// Personnalité de l'agent (utilisée dans les prompts)
+    /// Agent's personality (used in prompts)
     pub personality: String,
-    /// Mémoire de l'agent (historique des événements)
+    /// Agent's memory (history of events)
     pub memory: Vec<String>,
-    /// But actuel de l'agent
+    /// Current goal of the agent
     pub current_goal: String,
-    /// Historique des conversations
-    pub conversation:Vec<ChatMessage>,
-    /// Dernière action effectuée
+    /// Discussions history
+    pub conversation: Vec<ChatMessage>,
+    /// Last action performed by the agent
     pub last_action: String,
-
+    /// coordinates of the agent
     pub position: Coord,
-
+    /// Queue of messages received by the agent (to be processed)
     pub message_queue: VecDeque<Message>,
 }
 
-/// Représente un message échangé entre agents
+/// Represent a message exchanged between agents
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
-    /// Nom de l'expéditeur
+    /// Sender's name
     pub sender: String,
-    /// Nom du destinataire
+    /// Recipient's name (empty for broadcast)
     pub recipient: String,
-    /// Contenu du message
+    /// Message content
     pub content: String,
-    /// Timestamp du message
+    /// Timestamp of the message
     pub timestamp: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Coord {
     pub x: i32,
-    pub y: i32
+    pub y: i32,
 }
 
 impl Coord {
@@ -63,32 +63,22 @@ impl Agent {
             personality: personality.to_string(),
             memory: Vec::new(),
             current_goal: "Engage in meaningful conversation".to_string(),
-            conversation: VecDeque::new(),
+            conversation: Vec::new(),
             last_action: "Initialized".to_string(),
-            conv_channel: Default::default(),
 
             // todo : quel vitesse pour les deplacements ? ils ne penses pas assez vite pour se deplacer normalement, et les teleporté casserais l'intimité de la conversation
-            position : Coord { x: 0, y: 0 }
+            position: Coord { x: 0, y: 0 },
+            message_queue: Default::default(),
         }
     }
 
-
-
-
-
     /// Traite les messages reçus et génère une réponse
-    pub async fn process_messages(
-        &mut self,
-        ollama: &Ollama,
-    ) -> Option<Message> {
-
+    pub async fn process_messages(&mut self, ollama: &Ollama) -> Option<Message> {
         // Récupération des messages
-        let messages = self.message_queue.drain(..).collect::<Vec<Message>();
-
-
+        let messages = &mut self.message_queue.drain(..).collect();
 
         // Écoute des messages
-        self.listen(messages);
+        self.listen(&messages);
 
         // Réflexion sur les messages reçus
         self.reflect();
@@ -170,6 +160,7 @@ impl Agent {
 
                 return Ok(Message {
                     sender: self.name.clone(),
+                    recipient: "".to_string(),
                     content: parsed,
                     timestamp: 0, // Le monde mettra à jour le timestamp
                 });
@@ -186,7 +177,6 @@ impl Agent {
             }
         }
     }
-
 
     // pub async fn test_message(&mut self, ollama: &mut Ollama, model: String, prompt: String) {
     //

@@ -10,7 +10,9 @@ mod world;
 
 #[tokio::main]
 // add debug argument to the main function that can be passed to the program
-async fn main(debug: bool) {
+async fn main() {
+    let debug: bool = true;
+
     // Initialisation
     let ollama = Ollama::default();
     let mut world = world::World::new(ollama, debug);
