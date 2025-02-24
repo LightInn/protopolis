@@ -1,7 +1,6 @@
 // main.rs
 use crate::agent::Agent;
 use crate::messages::{Message, MessageBus};
-use serde::{Deserialize, Serialize};
 
 mod agent;
 mod messages;

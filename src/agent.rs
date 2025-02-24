@@ -3,9 +3,7 @@ use crate::messages::{Message, MessageBus};
 use colored::Colorize;
 use ollama_rs::generation::chat::request::ChatMessageRequest;
 use ollama_rs::generation::chat::ChatMessage;
-use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
-use serde_json::Value;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
