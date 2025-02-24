@@ -1,7 +1,7 @@
 // utils.rs
+use crate::agent::Agent;
 use serde_json::Value;
 use std::io;
-use crate::agent::Agent;
 
 pub fn validate_json(response: &str) -> bool {
     serde_json::from_str::<Value>(response).is_ok()
