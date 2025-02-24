@@ -12,11 +12,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Rust
+      - name: Restore Rust cache
+        uses: actions/cache@v3
+        id: rust-cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Setup Rust (MSVC)
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
           components: rust-src
+          cache: 'true'
+          cache-directories:
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          rustflags: '-Awarnings
 
       - name: Test Rust
         run: cargo test --all
