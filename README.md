@@ -3,10 +3,10 @@
 **A blazing-fast, modular, and extensible multi-agent AI framework in Rust**  
 *"Simulating intelligence at the speed of thought"*  
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/ai-agents-rs/rust.yml?style=for-the-badge)](https://github.com/yourusername/ai-agents-rs/actions)
-[![Crates.io](https://img.shields.io/crates/v/ai-agents?style=for-the-badge)](https://crates.io/crates/ai-agents)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](https://github.com/yourusername/ai-agents-rs)
-[![Downloads](https://img.shields.io/crates/d/ai-agents?style=for-the-badge)](https://crates.io/crates/ai-agents)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/LightInn/protopolis/rust.yml?style=for-the-badge)](https://github.com/LightInn/protopolis/actions)
+[![Crates.io](https://img.shields.io/crates/v/....?style=for-the-badge)](https://crates.io/crates/....)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](https://github.com/LightInn/protopolis)
+[![Downloads](https://img.shields.io/crates/d/....?style=for-the-badge)](https://crates.io/crates/....)
 
 <p align="center">
   <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbTZ0emJ6eHlmbW9nN2x4cW1nY3d3bHh5a2V4d2x1Z2J5Y3F1c3V5ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26tn33aiTi1jkl6H6/giphy.gif" width="600" alt="Agents discussing philosophy">
@@ -43,13 +43,13 @@ world.run().await;
 ## 🛠️ Installation
 
 ```bash
-cargo add ai-agents
+cargo add ....
 ```
 
 Or clone the repository:
 ```bash
-git clone https://github.com/yourusername/ai-agents-rs
-cd ai-agents-rs
+git clone https://github.com/LightInn/protopolis
+cd protopolis
 cargo run --release
 ```
 
