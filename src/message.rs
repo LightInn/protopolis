@@ -44,17 +44,14 @@ impl MessageBus {
                 continue;
             }
 
-            let mut agent = agent.write().expect("Impossible d'obtenir le verrou en écriture sur l'agent");
+            let mut agent = agent
+                .write()
+                .expect("Impossible d'obtenir le verrou en écriture sur l'agent");
             // Tente de verrouiller la file de messages de l'agent
 
             // Si recipient est vide, on diffuse à tous ceux dans le rayon
-            if message.recipient.is_empty() {
-                if agent.distance_square(sender_position) <= radius {
-                    agent.message_queue.push_back(message.clone());
-                }
-            }
-            // Sinon, on envoie uniquement à l'agent ciblé
-            else if agent.name == message.recipient {
+
+            if agent.distance_square(sender_position) <= radius {
                 agent.message_queue.push_back(message.clone());
             }
 

@@ -3,7 +3,7 @@ use crate::action::{Action, ActionHandler, ActionResult};
 use crate::config::AgentConfig;
 use crate::message::{Message, MessageBus};
 use crate::personality::Personality;
-use crate::prompt;
+use crate::{personality, prompt};
 use crate::prompt::Prompt;
 use crate::state::AgentState;
 use chrono::Utc;
@@ -50,14 +50,14 @@ impl Agent {
         Arc::new(RwLock::new(Self {
             id: Uuid::new_v4(),
             name: config.name.clone(),
-            personality: crate::personality::get_personality_template(&config.personality_template),
+            personality: personality::get_personality_template(&config.personality_template),
             state: AgentState::Idle,
             action_handler: ActionHandler::new(),
             message_bus,
             conversation_history: Vec::new(),
             memory: vec![],
             system_prompt: config.system_prompt.clone(),
-            next_prompt: "".to_string(),
+            next_prompt: Prompt::get_first_prompt( config.system_prompt.clone(),config.name.clone(), personality::get_personality_template(&config.personality_template)),
             message_queue: Default::default(),
         }))
     }
@@ -80,16 +80,6 @@ impl Agent {
             self.memory.push(message.clone());
             self.handle_message(message);
         }
-
-        let response = Message {
-            sender: agent_name,
-            recipient: "".to_string(),
-            content: Value::String("My answers".to_string()),
-            timestamp: Utc::now(),
-        };
-
-        // Appel en dehors du contexte d'emprunt mutable de self
-        message_bus.broadcast_message(response, 100);
     }
 
     /// Génère une réponse en utilisant Ollama
@@ -101,10 +91,14 @@ impl Agent {
 
         // Log coloré pour la génération de réponse
         println!(
-            "{} {}: Génération d'une réponse...",
+            "{} {}: Génération d'une réponse... ({})",
             "[GÉNÉRATION]".bright_cyan().bold(),
-            self.name.bright_green()
+            self.name.bright_green(),
+            self.next_prompt.bright_white()
         );
+
+
+
 
         loop {
             let response = ollama
@@ -136,6 +130,9 @@ impl Agent {
                     content: Value::String(parsed),
                     timestamp: Utc::now(),
                 };
+
+                // clear next prompt
+                self.next_prompt = "".to_string();
 
                 return Ok(message);
             }

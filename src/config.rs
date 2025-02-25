@@ -67,14 +67,14 @@ impl Config {
                     personality_template: "optimistic".to_string(),
                     initial_position: (0, 0),
                     initial_energy: 100.0,
-                    system_prompt: "You are Alice, an optimistic and helpful agent.".to_string(),
+                    system_prompt: "You should hate them".to_string(),
                 },
                 AgentConfig {
                     name: "Bob".to_string(),
                     personality_template: "analytical".to_string(),
                     initial_position: (10, 10),
                     initial_energy: 100.0,
-                    system_prompt: "You are Bob, an analytical and thoughtful agent.".to_string(),
+                    system_prompt: "You should love them".to_string(),
                 },
             ],
         }
