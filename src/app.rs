@@ -1,5 +1,5 @@
 use std::io;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc};
 use crossterm::event;
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, KeyEvent};
 use ratatui::{DefaultTerminal, Frame};
@@ -8,9 +8,11 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Line, Stylize, Text};
 use ratatui::symbols::border;
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Tabs, Widget};
+use task::spawn;
 use crate::simulation::{Simulation, SimulationEvent, SimulationState};
 use crate::message::Message;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
+use tokio::task;
 
 // États possibles de l'application
 #[derive(Debug, Clone, PartialEq)]
@@ -26,6 +28,7 @@ enum AppState {
 enum TabState {
     Simulation = 0,
     Configuration = 1,
+    Logs = 2,     // Nouvel onglet pour les logs
 }
 
 #[derive(Debug)]
@@ -46,7 +49,6 @@ pub struct App {
     cursor_position: usize,
     // Sender d'événements pour la simulation
     event_sender: Option<mpsc::Sender<SimulationEvent>>,
-
     // Stockage des logs
     logs: Vec<String>,
 }
@@ -69,10 +71,10 @@ impl Default for App {
 
 impl App {
     /// Exécute la boucle principale de l'application jusqu'à ce que l'utilisateur quitte
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+    pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
+            self.handle_events().await?;
         }
         Ok(())
     }
@@ -140,20 +142,17 @@ impl App {
     fn draw_simulation_screen(&self, frame: &mut Frame) {
         let area = frame.size();
 
-
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),  // Onglets
                 Constraint::Min(1),     // Contenu principal
-                Constraint::Length(5),  // Logs
                 Constraint::Length(1),  // Barre d'état
             ])
             .split(area);
-        
 
         // Onglets
-        let titles = vec!["Simulation", "Configuration"];
+        let titles = vec!["Simulation", "Configuration", "Logs"];
         let tabs = Tabs::new(titles)
             .select(self.tab_state as usize)
             .block(Block::default().borders(Borders::ALL))
@@ -179,23 +178,26 @@ impl App {
                 frame.render_widget(messages_list, chunks[1]);
             },
             TabState::Configuration => {
-                self.draw_configuration_screen(frame);
+                self.draw_configuration_content(frame, chunks[1]);
+            },
+            TabState::Logs => {
+                // Affichage des logs
+                let logs_block = Block::default()
+                    .title("Logs du système")
+                    .borders(Borders::ALL);
+
+                let logs_items: Vec<ListItem> = self.logs
+                    .iter()
+                    .map(|log| ListItem::new(log.clone()))
+                    .collect();
+
+                let logs_list = List::new(logs_items)
+                    .block(logs_block);
+
+                frame.render_widget(logs_list, chunks[1]);
             }
         }
 
-        // Affichage des logs
-        let logs_block = Block::default()
-            .title("Logs")
-            .borders(Borders::ALL);
-
-        let logs_items: Vec<ListItem> = self.logs
-            .iter()
-            .map(|log| ListItem::new(log.clone()))
-            .collect();
-
-        let logs_list = List::new(logs_items).block(logs_block);
-        frame.render_widget(logs_list, chunks[2]);
-        
         // Barre d'état
         let status = match self.state {
             AppState::Running => "En cours",
@@ -220,9 +222,44 @@ impl App {
     }
 
     fn draw_configuration_screen(&self, frame: &mut Frame) {
-        // Pour le moment, affichage basique de la configuration
         let area = frame.size();
 
+        // En-tête avec onglets
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),  // Onglets
+                Constraint::Min(1),     // Contenu principal
+                Constraint::Length(1),  // Barre d'état
+            ])
+            .split(area);
+
+        // Onglets
+        let titles = vec!["Simulation", "Configuration", "Logs"];
+        let tabs = Tabs::new(titles)
+            .select(self.tab_state as usize)
+            .block(Block::default().borders(Borders::ALL))
+            .highlight_style(ratatui::style::Style::default().bold());
+        frame.render_widget(tabs, chunks[0]);
+
+        // Contenu de configuration
+        self.draw_configuration_content(frame, chunks[1]);
+
+        // Barre d'état (même que pour simulation)
+        let status_line = Line::from(vec![
+            " Configuration ".into(),
+            " | ".into(),
+            " Onglets ".into(),
+            "<Tab>".blue().bold(),
+            " Quitter ".into(),
+            "<Q> ".blue().bold(),
+        ]);
+
+        let status_widget = Paragraph::new(status_line);
+        frame.render_widget(status_widget, chunks[2]);
+    }
+
+    fn draw_configuration_content(&self, frame: &mut Frame, area: Rect) {
         let block = Block::default()
             .title("Configuration")
             .borders(Borders::ALL);
@@ -234,6 +271,8 @@ impl App {
                 "Sujet: ".into(),
                 self.topic.clone().yellow(),
             ]),
+            Line::from(""),
+            Line::from("Vous pouvez changer de sujet en retournant à l'écran initial (Q puis relancer)"),
             // Vous pourriez ajouter d'autres paramètres ici
         ]);
 
@@ -244,20 +283,20 @@ impl App {
     }
 
     /// Gestion des événements
-    fn handle_events(&mut self) -> io::Result<()> {
+    async fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+                self.handle_key_event(key_event).await
             }
             _ => {}
         };
         Ok(())
     }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
+    async fn handle_key_event(&mut self, key_event: KeyEvent) {
         match self.state {
             AppState::Initial => self.handle_initial_key_event(key_event),
-            AppState::Running | AppState::Paused => self.handle_simulation_key_event(key_event),
+            AppState::Running | AppState::Paused => self.handle_simulation_key_event(key_event).await,
             AppState::Configuration => self.handle_configuration_key_event(key_event),
         }
     }
@@ -294,10 +333,10 @@ impl App {
         }
     }
 
-    fn handle_simulation_key_event(&mut self, key_event: KeyEvent) {
+    async fn handle_simulation_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
-            KeyCode::Char(' ') => self.toggle_pause(),
+            KeyCode::Char(' ') => self.toggle_pause().await,
             KeyCode::Tab => self.toggle_tab(),
             _ => {}
         }
@@ -316,23 +355,48 @@ impl App {
     }
 
     fn start_simulation(&mut self) {
-        // Ici, vous allez initialiser votre simulation avec le sujet
-        // Pour l'instant, nous allons simplement changer l'état
         self.state = AppState::Running;
+        self.log(format!("Démarrage de la simulation: {}", self.topic));
 
-        // Simuler des messages pour test
-        self.messages.push(format!("Simulation démarrée sur le sujet: {}", self.topic));
-        self.messages.push("Agent 1: Bonjour, comment puis-je vous aider?".to_string());
-        self.messages.push("Agent 2: Je suis ici pour discuter du sujet.".to_string());
+        // Créer une nouvelle simulation avec le sujet
+        let mut simulation = Simulation::new(self.topic.clone());
 
-        // TODO: Initialiser la vraie simulation
-        // self.simulation = Some(Arc::new(RwLock::new(Simulation::new(self.topic.clone()))));
+        // Si nous avons un sender d'événements, le configurer pour la simulation
+        if let Some(event_sender) = self.event_sender.clone() {
+            simulation.set_event_sender(event_sender);
+        }
+
+        // Encapsuler la simulation dans un Arc<RwLock>
+        let simulation_arc = Arc::new(RwLock::new(simulation));
+        self.simulation = Some(simulation_arc.clone());
+
+        // Lancer la simulation en arrière-plan
+        let simulation_arc_clone = simulation_arc.clone();
+        spawn(async move {
+            if let Err(e) = Simulation::run_async(simulation_arc_clone).await {
+                eprintln!("Erreur lors de l'exécution de la simulation: {}", e);
+            }
+        });
+
+        self.log("Simulation démarrée avec succès".to_string());
     }
 
-    fn toggle_pause(&mut self) {
+    async fn toggle_pause(&mut self) {
         match self.state {
-            AppState::Running => self.state = AppState::Paused,
-            AppState::Paused => self.state = AppState::Running,
+            AppState::Running => {
+                self.state = AppState::Paused;
+                if let Some(simulation) = &self.simulation {
+                    simulation.read().await.pause();
+                }
+                self.log("Simulation mise en pause".to_string());
+            },
+            AppState::Paused => {
+                self.state = AppState::Running;
+                if let Some(simulation) = &self.simulation {
+                    simulation.read().await.resume();
+                }
+                self.log("Simulation reprise".to_string());
+            },
             _ => {}
         }
     }
@@ -340,7 +404,8 @@ impl App {
     fn toggle_tab(&mut self) {
         match self.tab_state {
             TabState::Simulation => self.tab_state = TabState::Configuration,
-            TabState::Configuration => self.tab_state = TabState::Simulation,
+            TabState::Configuration => self.tab_state = TabState::Logs,
+            TabState::Logs => self.tab_state = TabState::Simulation,
         }
     }
 
@@ -348,16 +413,17 @@ impl App {
     pub fn add_message(&mut self, message: String) {
         self.messages.push(message);
     }
-    
-    
+
     // set event sender
     pub fn set_event_sender(&mut self, event_sender: mpsc::Sender<SimulationEvent>) {
         self.event_sender = Some(event_sender);
     }
 
     pub fn log(&mut self, message: String) {
-        self.logs.push(message);
-        if self.logs.len() > 10 { // Limite d'affichage
+        let log_entry = format!("[{}] {}", chrono::Local::now().format("%H:%M:%S"), message);
+        self.logs.push(log_entry);
+        // Limiter le nombre de logs à afficher (par exemple, 100 derniers)
+        while self.logs.len() > 100 {
             self.logs.remove(0);
         }
     }

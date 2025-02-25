@@ -57,7 +57,7 @@ impl ActionHandler {
     }
 
     /// Executes an action and returns the result
-    pub fn execute(&self, action: &Action) -> Result<ActionResult, Box<dyn Error>> {
+    pub fn execute(&self, action: &Action) -> Result<ActionResult, Box<dyn std::error::Error + Send + Sync>> {
         match action {
             Action::Think { topic } => Ok(ActionResult {
                 success: true,

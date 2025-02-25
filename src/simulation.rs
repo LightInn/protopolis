@@ -1,13 +1,13 @@
+use crate::agent;
 use crate::config::Config;
 use crate::message::MessageBus;
-use crate::{agent};
-use std::path::Path;
-use std::sync::{Arc, RwLock, Mutex};
-use std::time::Duration;
 use cli_log::{debug, info};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::sync::{mpsc, RwLock};
 use tokio::task;
 use tokio::time;
-use tokio::sync::mpsc;
 
 /// World time management
 #[derive(Debug, Clone)]
@@ -83,77 +83,119 @@ impl Simulation {
     fn send_event(&self, event: SimulationEvent) {
         if let Some(sender) = &self.event_sender {
             let sender_clone = sender.clone();
+            let event_clone = event.clone();
+
+            // Utiliser spawn_blocking pour éviter de bloquer le thread courant
             tokio::spawn(async move {
-                if let Err(e) = sender_clone.send(event).await {
-                    eprintln!("Erreur lors de l'envoi d'un événement: {}", e);
+                match sender_clone.send(event_clone).await {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("Erreur lors de l'envoi d'un événement: {}", e),
                 }
             });
         }
     }
 
-    pub fn get_state(&self) -> SimulationState {
-        self.state.read().unwrap().clone()
+    pub async fn get_state(&self) -> SimulationState {
+        self.state.read().await.clone()
     }
 
-    pub fn pause(&self) {
-        let mut state = self.state.write().unwrap();
+    pub async fn pause(&self) {
+        let mut state = self.state.write().await;
         if *state == SimulationState::Running {
             info!("Simulation mise en pause");
             *state = SimulationState::Paused;
-            self.send_event(SimulationEvent::StateChange("Simulation mise en pause".to_string()));
+            self.send_event(SimulationEvent::StateChange(
+                "Simulation mise en pause".to_string(),
+            ));
         }
     }
 
-    pub fn resume(&self) {
-        let mut state = self.state.write().unwrap();
+    pub async fn resume(&self) {
+        let mut state = self.state.write().await;
         if *state == SimulationState::Paused {
             info!("Simulation reprise");
             *state = SimulationState::Running;
-            self.send_event(SimulationEvent::StateChange("Simulation reprise".to_string()));
+            self.send_event(SimulationEvent::StateChange(
+                "Simulation reprise".to_string(),
+            ));
         }
     }
 
-    pub fn toggle_pause(&self) {
-        let state = self.state.read().unwrap().clone();
+    pub async fn toggle_pause(&self) {
+        let state = self.state.read().await.clone();
         match state {
-            SimulationState::Running => self.pause(),
-            SimulationState::Paused => self.resume(),
+            SimulationState::Running => self.pause().await,
+            SimulationState::Paused => self.resume().await,
             _ => {}
         }
     }
 
     pub async fn initialize(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.send_event(SimulationEvent::Message(
+            "Initialisation de la simulation...".to_string(),
+        ));
+
         // Charger la configuration
         let config = match Config::load(Path::new("config.json")) {
-            Ok(config) => config,
+            Ok(config) => {
+                self.send_event(SimulationEvent::Message(
+                    "Configuration chargée avec succès".to_string(),
+                ));
+                config
+            }
             Err(e) => {
                 let message = format!("Erreur de chargement de la configuration: {}", e);
-                self.send_event(SimulationEvent::Message(message));
+                self.send_event(SimulationEvent::Message(message.clone()));
 
+                self.send_event(SimulationEvent::Message(
+                    "Création d'une configuration par défaut...".to_string(),
+                ));
                 let conf = Config::default();
                 conf.save(Path::new("config.json"))?;
+
+                self.send_event(SimulationEvent::Message(
+                    "Configuration par défaut créée".to_string(),
+                ));
                 conf
             }
         };
-        
+
         debug!("Configuration chargée: {:#?}", config);
 
         self.debug = config.debug;
 
         // Initialiser le message bus
         let msg_bus = MessageBus::new(config.debug);
+        self.send_event(SimulationEvent::Message(
+            "Bus de message initialisé".to_string(),
+        ));
 
         // Mettre à jour le world_time avec la config
-        let mut world_time = self.world_time.write().unwrap();
+        let mut world_time = self.world_time.write().await;
         *world_time = WorldTime::new(config.world.ticks_per_hour);
+        self.send_event(SimulationEvent::Message(format!(
+            "Temps mondial configuré: {} ticks/heure",
+            config.world.ticks_per_hour
+        )));
 
         // Créer les agents à partir de la configuration
-        for agent_config in &config.agents {
+        self.send_event(SimulationEvent::Message(format!(
+            "Création de {} agents...",
+            config.agents.len()
+        )));
+
+        for (i, agent_config) in config.agents.iter().enumerate() {
             let agent = agent::Agent::new(agent_config, msg_bus.clone().into(), config.debug);
+            self.send_event(SimulationEvent::Message(format!(
+                "Agent {}/{} créé: {}",
+                i + 1,
+                config.agents.len(),
+                agent_config.name
+            )));
 
             // Injecter le sujet dans les agents
             {
-                let mut agent_write = agent.write().unwrap();
+                let mut agent_write = agent.write().await;
                 agent_write.set_topic(&self.topic);
             }
 
@@ -162,49 +204,78 @@ impl Simulation {
         }
 
         debug!("Agents initialisés: {:#?}", self.agents);
-        
-        let message = format!("Simulation initialisée avec {} agents sur le sujet: {}",
-                              self.agents.len(), self.topic);
+
+        let message = format!(
+            "Simulation initialisée avec {} agents sur le sujet: {}",
+            self.agents.len(),
+            self.topic
+        );
         self.send_event(SimulationEvent::Message(message));
 
         // Changer l'état à Running
-        let mut state = self.state.write().unwrap();
+        let mut state = self.state.write().await;
         *state = SimulationState::Running;
+        self.send_event(SimulationEvent::StateChange(
+            "Simulation démarrée".to_string(),
+        ));
 
         Ok(())
     }
 
-    pub async fn run_async(simulation: Arc<RwLock<Self>>) -> Result<(), Box<dyn std::error::Error>> {
+    // Modification de la méthode run_async pour améliorer la gestion des états et fournir plus de retours
+    pub async fn run_async(
+        simulation: Arc<RwLock<Self>>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Initialisation
         {
-            let mut sim = simulation.write().unwrap();
-            sim.initialize().await?;
+            let mut sim = simulation.write().await;
+            sim.send_event(SimulationEvent::Message(
+                "Démarrage de l'initialisation...".to_string(),
+            ));
+
+            if let Err(e) = sim.initialize().await {
+                let error_msg = format!("Erreur d'initialisation: {}", e);
+                sim.send_event(SimulationEvent::Message(error_msg.clone()));
+                return Err(error_msg.into());
+            }
         }
 
         // Boucle principale
-        let mut interval = time::interval(Duration::from_millis(100));
+        let mut interval = time::interval(Duration::from_millis(500)); // Un peu plus lent pour moins charger le CPU
+        let mut last_hour = 0;
 
         info!("Simulation démarrée");
+        simulation
+            .read()
+            .await
+            .send_event(SimulationEvent::Message(
+                "Début de la simulation".to_string(),
+            ));
+
         loop {
             interval.tick().await;
 
             // Vérifier l'état
             let state;
             {
-                let sim = simulation.read().unwrap();
-                state = sim.state.read().unwrap().clone();
+                let sim = simulation.read().await;
+                state = sim.state.read().await.clone();
             }
 
             match state {
                 SimulationState::Running => {
                     // Mise à jour du temps
                     {
-                        let sim = simulation.read().unwrap();
-                        let mut world_time = sim.world_time.write().unwrap();
+                        let sim = simulation.read().await;
+                        let mut world_time = sim.world_time.write().await;
                         world_time.increment();
 
-                        if sim.debug {
-                            let message = format!("Heure mondiale: {}", world_time.get_hour());
+                        let current_hour = world_time.get_hour();
+
+                        // Envoyer un message seulement quand l'heure change
+                        if current_hour != last_hour {
+                            last_hour = current_hour;
+                            let message = format!("Heure mondiale actuelle: {}", current_hour);
                             sim.send_event(SimulationEvent::Message(message));
                         }
                     }
@@ -214,47 +285,62 @@ impl Simulation {
                     let agents;
                     let debug;
                     {
-                        let sim = simulation.read().unwrap();
-                        current_tick = sim.world_time.read().unwrap().get_tick();
+                        let sim = simulation.read().await;
+                        current_tick = sim.world_time.read().await.get_tick();
                         agents = sim.agents.clone();
                         debug = sim.debug;
                     }
 
                     for agent in &agents {
-                        let mut agent = agent.write().unwrap();
+                        let agent_name;
+                        {
+                            let agent_read = agent.read().await;
+                            agent_name = agent_read.name.clone();
+                        }
+
+                        let mut agent = agent.write().await;
                         if let Err(e) = agent.update(current_tick).await {
-                            let sim = simulation.read().unwrap();
-                            let message = format!("Erreur de mise à jour de l'agent {}: {}", agent.name, e);
+                            let sim = simulation.read().await;
+                            let message =
+                                format!("Erreur de mise à jour de l'agent {}: {}", agent.name, e);
                             sim.send_event(SimulationEvent::Message(message));
                         }
 
                         if debug {
-                            let sim = simulation.read().unwrap();
-                            let message = format!("{}: État: {:?}, Énergie: {}",
-                                                  agent.name, agent.get_state(), agent.get_energy());
+                            let sim = simulation.read().await;
+                            let message = format!(
+                                "{}: État: {:?}, Énergie: {}",
+                                agent.name,
+                                agent.get_state(),
+                                agent.get_energy()
+                            );
                             sim.send_event(SimulationEvent::Message(message));
                         }
                     }
 
                     // Vérifier la condition de sortie
                     {
-                        let sim = simulation.read().unwrap();
-                        let hour = sim.world_time.read().unwrap().get_hour();
-                        if hour >= 1 {  // 24 heures simulées
-                            let mut state = sim.state.write().unwrap();
+                        let sim = simulation.read().await;
+                        let hour = sim.world_time.read().await.get_hour();
+                        if hour >= 24 {
+                            // 24 heures simulées
+                            let mut state = sim.state.write().await;
                             *state = SimulationState::Finished;
+                            sim.send_event(SimulationEvent::Message(
+                                "Simulation terminée (24 heures complétées)".to_string(),
+                            ));
                             sim.send_event(SimulationEvent::Finished);
                             break;
                         }
                     }
-                },
+                }
                 SimulationState::Paused => {
                     // En pause, on attend simplement
                     tokio::time::sleep(Duration::from_millis(100)).await;
-                },
+                }
                 SimulationState::Finished => {
                     break;
-                },
+                }
                 _ => {}
             }
         }

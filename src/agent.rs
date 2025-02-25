@@ -1,5 +1,4 @@
 // agent.rs
-use cli_log::info;
 use crate::action::{Action, ActionHandler, ActionResult};
 use crate::config::AgentConfig;
 use crate::message::{Message, MessageBus};
@@ -8,13 +7,15 @@ use crate::personality::Personality;
 use crate::prompt::Prompt;
 use crate::state::AgentState;
 use chrono::Utc;
+use cli_log::info;
 use colored::Colorize;
 use ollama_rs::generation::chat::request::ChatMessageRequest;
 use ollama_rs::generation::chat::ChatMessage;
 use ollama_rs::Ollama;
 use serde_json::Value;
 use std::collections::VecDeque;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Represents an autonomous agent in the system
@@ -96,7 +97,7 @@ impl Agent {
     }
 
     /// Génère une réponse en utilisant Ollama
-    async fn generate_response(&mut self) -> Result<Message, Box<dyn std::error::Error>> {
+    async fn generate_response(&mut self) -> Result<Message, Box<dyn std::error::Error + Send + Sync>> {
         let mut retries = 3;
         let mut ollama = Ollama::default();
 
@@ -127,12 +128,12 @@ impl Agent {
                 // self.last_action = Mutex::from("Speaking".to_string());
 
                 // Log coloré pour la réponse générée
-                println!(
-                    "{} {}: {}",
-                    "[RÉPONSE]".bright_green().bold(),
-                    self.name.bright_green(),
-                    parsed.bright_white()
-                );
+                // println!(
+                //     "{} {}: {}",
+                //     "[RÉPONSE]".bright_green().bold(),
+                //     self.name.bright_green(),
+                //     parsed.bright_white()
+                // );
 
                 info!("{}: {}", self.name, parsed);
 
@@ -162,7 +163,7 @@ impl Agent {
     }
 
     /// Updates the agent's state and performs actions
-    pub async fn update(&mut self, current_tick: u64) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn update(&mut self, current_tick: u64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Consume energy over time
         self.consume_base_energy();
 
@@ -184,7 +185,7 @@ impl Agent {
     async fn decide_next_action(
         &mut self,
         current_tick: u64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Get available actions based on current state and energy
         let available_actions = self.get_available_actions();
 

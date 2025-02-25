@@ -12,20 +12,16 @@ use crate::app::App;
 use crate::simulation::{Simulation, SimulationEvent};
 use cli_log::*;
 use color_eyre::eyre::Result;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     color_eyre::install()?;
     init_cli_log!();
 
-    time!(Debug, "main");
-    info!("count is {}", 423);
-    debug!("data: {:#?}", (423, "forty-two"));
-    warn!("this application does nothing");
-    log_mem(Level::Info);
-    info!("bye");
+    info!("Démarrage de l'application");
 
     // Créer un runtime tokio
     let rt = Runtime::new().unwrap();
@@ -44,34 +40,35 @@ fn main() -> Result<()> {
 
     // Démarrer le thread qui va traiter les événements
     rt.spawn(async move {
+        info!("Thread d'écoute des événements démarré");
         while let Some(event) = event_receiver.recv().await {
             let mut app = app_clone.lock().unwrap();
             match event {
                 SimulationEvent::Message(msg) => {
-                    app.add_message(msg);
+                    app.add_message(msg.clone());
+                    app.log(format!("Message: {}", msg));
                 }
                 SimulationEvent::StateChange(msg) => {
-                    app.add_message(format!("État: {}", msg));
+                    app.log(format!("Changement d'état: {}", msg));
                 }
                 SimulationEvent::Finished => {
                     app.add_message("Simulation terminée".to_string());
+                    app.log("Simulation terminée".to_string());
                 }
             }
         }
+        info!("Thread d'écoute des événements terminé");
     });
 
-    // Exécuter l'application
-    let app_result = {
+    {
         let mut app = app.lock().unwrap();
         app.set_event_sender(event_sender);
-        app.run(&mut terminal)
-    };
+        app.log("Application initialisée".to_string());
+        let result = app.run(&mut terminal);
+        ratatui::restore();
+        result.await?
+    }
 
-    // Restaurer le terminal
-    ratatui::restore();
-
-    // Retourner le résultat
-    // app_result
-
+    info!("Application terminée");
     Ok(())
 }

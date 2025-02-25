@@ -3,7 +3,8 @@ use crate::agent::Agent;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
 pub struct Message {
@@ -28,27 +29,25 @@ impl MessageBus {
     }
 
     /// Enregistre un agent dans le bus
-    pub fn register_agent(&self, agent: Arc<RwLock<Agent>>) {
+    pub async fn register_agent(&self, agent: Arc<RwLock<Agent>>) {
         self.subscribers
             .write()
-            .unwrap()
-            .insert(agent.read().unwrap().name.clone(), agent.clone());
+            .await
+            .insert(agent.read().await.name.clone(), agent.clone());
     }
 
     /// Diffuse un message à tous les agents, ou seulement à ceux spécifiés si recipient n'est pas vide
-    pub fn broadcast_message(&self, message: Message, radius: i32) {
+    pub async fn broadcast_message(&self, message: Message, radius: i32) {
         let sender_position = (0, 0);
         // On verrouille une seule fois la map des abonnés
-        let subscribers = self.subscribers.read().unwrap();
+        let subscribers = self.subscribers.read().await;
         for agent in subscribers.values() {
             // Évite de se renvoyer un message à soi-même
             if agent.try_read().is_err() {
                 continue;
             }
 
-            let mut agent = agent
-                .write()
-                .expect("Impossible d'obtenir le verrou en écriture sur l'agent");
+            let mut agent = agent.write().await;
             // Tente de verrouiller la file de messages de l'agent
 
             // Si recipient est vide, on diffuse à tous ceux dans le rayon
@@ -68,9 +67,9 @@ impl MessageBus {
     }
 
     /// Diffuse un message système à tous les agents (sans rayon)
-    pub fn broadcast_system_message(&self, message: Message) {
-        for agent in self.subscribers.read().unwrap().values() {
-            let mut agent = agent.write().unwrap();
+    pub async fn broadcast_system_message(&self, message: Message) {
+        for agent in self.subscribers.read().await.values() {
+            let mut agent = agent.write().await;
             agent.message_queue.push_back(message.clone());
         }
     }
