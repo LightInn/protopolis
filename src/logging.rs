@@ -46,7 +46,7 @@ impl Logger {
 
 // Créer une instance globale
 lazy_static! {
-    static ref LOGGER: Logger = {
+    pub static ref LOGGER: Logger = {
         let (tx, mut rx) = mpsc::channel(100);
         // Spawn un task pour gérer les logs
         tokio::spawn(async move {

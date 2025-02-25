@@ -56,9 +56,9 @@ pub enum SimulationState {
 
 #[derive(Debug)]
 pub struct Simulation {
-    state: Arc<RwLock<SimulationState>>,
+    pub(crate) state: Arc<RwLock<SimulationState>>,
     world_time: Arc<RwLock<WorldTime>>,
-    agents: Vec<Arc<RwLock<agent::Agent>>>,
+    pub(crate) agents: Vec<Arc<RwLock<agent::Agent>>>,
     topic: String,
     debug: bool,
     event_sender: Option<mpsc::Sender<SimulationEvent>>,

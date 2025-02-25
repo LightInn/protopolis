@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use crate::logging::{LOGGER, LogLevel};
 
 /// Represents an autonomous agent in the system
 #[derive(Debug)]
@@ -312,7 +313,11 @@ impl Agent {
 
     /// Sends a message to another agent
     pub fn send_message(&self, message: Message) {
-        self.message_bus.broadcast_message(message, 100);
+        // Envoyer au message bus
+        self.message_bus.broadcast_message(message.clone(), 100);
+
+        // Envoyer à l'UI via le logger
+        LOGGER.log(LogLevel::Info, &format!("{}: {}", self.name, message.content));
     }
 
     pub fn distance_square(&self, sender_position: (i32, i32)) -> i32 {

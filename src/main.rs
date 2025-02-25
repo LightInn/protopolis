@@ -11,17 +11,33 @@ mod state;
 mod logging;
 
 use crate::app::App;
-use crate::simulation::SimulationEvent;
+use crate::simulation::{SimulationEvent, SimulationState};
 use cli_log::*;
 use color_eyre::eyre::Result;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
+async fn cleanup(app: Arc<Mutex<App>>) {
+    // Attendre que tous les agents terminent
+    let mut app = app.lock().unwrap();
+    if let Some(simulation) = &app.simulation {
+        let mut sim = simulation.write().await;
+        *sim.state.write().await = SimulationState::Finished;
+
+        // Attendre que tous les agents terminent
+        for agent in &sim.agents {
+            let _ = agent.write().await;
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
     init_cli_log!();
+    
+    
 
     info!("Démarrage de l'application");
 
@@ -39,6 +55,9 @@ async fn main() -> Result<()> {
 
     // Créer une référence à l'app pour le thread de la simulation
     let app_clone = app.clone();
+
+    // tokio::signal::ctrl_c().await?;
+    // cleanup(app.clone()).await;
 
     // Démarrer le thread qui va traiter les événements
     rt.spawn(async move {
@@ -70,6 +89,8 @@ async fn main() -> Result<()> {
         ratatui::restore();
         result.await?
     }
+
+ 
 
     info!("Application terminée");
     Ok(())

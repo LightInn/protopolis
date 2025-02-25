@@ -44,7 +44,7 @@ pub struct App {
     // Si l'application doit se terminer
     exit: bool,
     // Simulation
-    simulation: Option<Arc<RwLock<Simulation>>>,
+    pub(crate) simulation: Option<Arc<RwLock<Simulation>>>,
     // Position du curseur dans le prompt initial
     cursor_position: usize,
     // Sender d'événements pour la simulation
