@@ -1,0 +1,44 @@
+{
+  "world": {
+    "ticks_per_hour": 60,
+    "world_size": [
+      1000,
+      1000
+    ],
+    "max_broadcast_range": 100,
+    "base_energy_consumption": 0.1
+  },
+  "agents": [
+    {
+      "name": "Alice",
+      "personality_template": "optimistic",
+      "initial_position": [
+        0,
+        0
+      ],
+      "initial_energy": 100.0,
+      "system_prompt": "Bob have a terrible secret"
+    },
+    {
+      "name": "Bob",
+      "personality_template": "analytical",
+      "initial_position": [
+        10,
+        10
+      ],
+      "initial_energy": 100.0,
+      "system_prompt": "Alice is lying"
+    },
+    {
+      "name": "Charlie",
+      "personality_template": "pessimistic",
+      "initial_position": [
+        20,
+        20
+      ],
+      "initial_energy": 100.0,
+      "system_prompt": "Alice is lying"
+    }
+  ],
+  "debug": false
+}

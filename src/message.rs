@@ -16,12 +16,14 @@ pub struct Message {
 #[derive(Debug)]
 pub struct MessageBus {
     subscribers: RwLock<HashMap<String, Arc<RwLock<Agent>>>>,
+    debug: bool,
 }
 
 impl MessageBus {
-    pub fn new() -> Arc<Self> {
+    pub fn new(debug: bool) -> Arc<Self> {
         Arc::new(Self {
             subscribers: RwLock::new(HashMap::new()),
+            debug,
         })
     }
 
@@ -60,7 +62,9 @@ impl MessageBus {
             //     agent.name
             // );
         }
-        println!("Message broadcasted");
+        if self.debug {
+            println!("Message broadcasted");
+        }
     }
 
     /// Diffuse un message système à tous les agents (sans rayon)

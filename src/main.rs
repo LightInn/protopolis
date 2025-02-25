@@ -1,7 +1,8 @@
 // main.rs
+use log::debug;
+use ollama_rs::Ollama;
 use std::path::Path;
 use std::time::Duration;
-use ollama_rs::Ollama;
 use tokio::time;
 
 mod action;
@@ -9,8 +10,8 @@ mod agent;
 mod config;
 mod message;
 mod personality;
-mod state;
 mod prompt;
+mod state;
 
 use crate::config::Config;
 use crate::message::MessageBus;
@@ -41,18 +42,20 @@ impl WorldTime {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration
-    let config = match Config::load(Path::new("config/config.json")) {
+    let config = match Config::load(Path::new("config.json")) {
         Ok(config) => config,
-        Err(_) => {
-            println!("No config file found, using default configuration");
+        Err(e) => {
+            println!("Error loading config: {}", e);
+            println!("No config cannot be loaded, using default configuration");
             Config::default()
         }
     };
 
-
-
+    if config.debug {
+        println!("Debug is {}", config.debug);
+    }
     // Initialize message bus
-    let msg_bus = MessageBus::new();
+    let msg_bus = MessageBus::new(config.debug);
 
     // Initialize world time
     let mut world_time = WorldTime::new(config.world.ticks_per_hour);
@@ -60,10 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create agents from configuration
     let mut agents = Vec::new();
     for agent_config in &config.agents {
-        let agent = agent::Agent::new(
-            agent_config,
-            msg_bus.clone().into(),
-        );
+        let agent = agent::Agent::new(agent_config, msg_bus.clone().into(), config.debug);
 
         msg_bus.register_agent(agent.clone());
         agents.push(agent);
@@ -75,14 +75,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         interval.tick().await;
         world_time.increment();
 
-        println!("World time: Hour {}", world_time.get_hour());
-
+        if config.debug {
+            println!("World time: Hour {}", world_time.get_hour());
+        }
         // Update all agents
         for agent in &agents {
             let mut agent = agent.write().unwrap();
             agent.update(world_time.current_tick).await?;
-            println!("{}: {:?}", agent.name, agent.get_state());
-            println!("{}: Energy: {}", agent.name, agent.get_energy());
+
+            if config.debug {
+                println!("{}: {:?}", agent.name, agent.get_state());
+                println!("{}: Energy: {}", agent.name, agent.get_energy());
+            }
         }
 
         // Optional: Break condition (e.g., after 24 simulation hours)

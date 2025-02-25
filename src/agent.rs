@@ -3,9 +3,9 @@ use crate::action::{Action, ActionHandler, ActionResult};
 use crate::config::AgentConfig;
 use crate::message::{Message, MessageBus};
 use crate::personality::Personality;
-use crate::{personality, prompt};
 use crate::prompt::Prompt;
 use crate::state::AgentState;
+use crate::{personality, prompt};
 use chrono::Utc;
 use colored::Colorize;
 use ollama_rs::generation::chat::request::ChatMessageRequest;
@@ -30,6 +30,7 @@ pub struct Agent {
     pub system_prompt: String,
     pub next_prompt: String,
     pub message_queue: VecDeque<Message>,
+    debug: bool,
 }
 
 #[derive(Debug)]
@@ -46,7 +47,11 @@ impl Coord {
 
 impl Agent {
     /// Creates a new agent from configuration
-    pub fn new(config: &AgentConfig, message_bus: Arc<MessageBus>) -> Arc<RwLock<Agent>> {
+    pub fn new(
+        config: &AgentConfig,
+        message_bus: Arc<MessageBus>,
+        debug: bool,
+    ) -> Arc<RwLock<Agent>> {
         Arc::new(RwLock::new(Self {
             id: Uuid::new_v4(),
             name: config.name.clone(),
@@ -57,8 +62,13 @@ impl Agent {
             conversation_history: Vec::new(),
             memory: vec![],
             system_prompt: config.system_prompt.clone(),
-            next_prompt: Prompt::get_first_prompt( config.system_prompt.clone(),config.name.clone(), personality::get_personality_template(&config.personality_template)),
+            next_prompt: Prompt::get_first_prompt(
+                config.system_prompt.clone(),
+                config.name.clone(),
+                personality::get_personality_template(&config.personality_template),
+            ),
             message_queue: Default::default(),
+            debug,
         }))
     }
 
@@ -73,32 +83,31 @@ impl Agent {
 
         // Maintenant, on peut traiter les messages sans verrou
         for message in messages {
-            println!(
-                "{} reçoit de {} pour {} : {}",
-                agent_name, message.sender, message.recipient, message.content
-            );
+            if self.debug {
+                println!(
+                    "{} reçoit de {} pour {} : {}",
+                    agent_name, message.sender, message.recipient, message.content
+                );
+            }
             self.memory.push(message.clone());
             self.handle_message(message);
         }
     }
 
     /// Génère une réponse en utilisant Ollama
-    async fn generate_response(
-        &mut self,
-    ) -> Result<Message, Box<dyn std::error::Error>> {
+    async fn generate_response(&mut self) -> Result<Message, Box<dyn std::error::Error>> {
         let mut retries = 3;
         let mut ollama = Ollama::default();
 
-        // Log coloré pour la génération de réponse
-        println!(
-            "{} {}: Génération d'une réponse... ({})",
-            "[GÉNÉRATION]".bright_cyan().bold(),
-            self.name.bright_green(),
-            self.next_prompt.bright_white()
-        );
-
-
-
+        if self.debug {
+            // Log coloré pour la génération de réponse
+            println!(
+                "{} {}: Génération d'une réponse... ({})",
+                "[GÉNÉRATION]".bright_cyan().bold(),
+                self.name.bright_green(),
+                self.next_prompt.bright_white()
+            );
+        }
 
         loop {
             let response = ollama
@@ -191,9 +200,8 @@ impl Agent {
             self.apply_action_result(result);
         }
 
-
         // Generate a response using Ollama
-       let generated = self.generate_response().await?;
+        let generated = self.generate_response().await?;
 
         // Send the generated response
         self.send_message(generated);
@@ -239,7 +247,9 @@ impl Agent {
         energy += result.energy_delta;
 
         if let Some(message) = result.message {
-            println!("{}: {}", self.name, message);
+            if self.debug {
+                println!("{}: {}", self.name, message);
+            }
         }
     }
 
@@ -263,7 +273,10 @@ impl Agent {
         if self.state == AgentState::Sleeping {
             // Analyze conversation history and create memory summaries
             // This could involve NLP or other analysis techniques
-            println!("{} is synthesizing memories while sleeping", self.name);
+
+            if self.debug {
+                println!("{} is synthesizing memories while sleeping", self.name);
+            }
         }
     }
 

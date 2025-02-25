@@ -36,6 +36,7 @@ pub struct AgentConfig {
 pub struct Config {
     pub world: WorldConfig,
     pub agents: Vec<AgentConfig>,
+    pub debug: bool,
 }
 
 impl Default for WorldConfig {
@@ -77,6 +78,7 @@ impl Config {
                     system_prompt: "Alice is lying".to_string(),
                 },
             ],
+            debug: true,
         }
     }
 
