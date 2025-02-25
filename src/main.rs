@@ -45,7 +45,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => {
             println!("Error loading config: {}", e);
             println!("No config cannot be loaded, using default configuration");
-            Config::default()
+            let conf = Config::default();
+            conf.save(Path::new("config.json"))?;
+            conf
         }
     };
 

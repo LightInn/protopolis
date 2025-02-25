@@ -78,7 +78,7 @@ impl Config {
                     system_prompt: "Alice is lying".to_string(),
                 },
             ],
-            debug: true,
+            debug: false,
         }
     }
 

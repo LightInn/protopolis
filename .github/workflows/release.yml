@@ -16,6 +16,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
 
       - name: Get version from tag
         id: get_version
@@ -32,7 +33,7 @@ jobs:
           git config --local user.name "GitHub Action"
           git add Cargo.toml
           git commit -m "chore: update version to $VERSION [skip ci]"
-          git push
+          git push origin main
   build-windows:
     needs: update-version
     runs-on: windows-latest
