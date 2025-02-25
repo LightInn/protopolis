@@ -1,11 +1,15 @@
 // simulation.rs
-use crate::config::Config;
-use crate::message::MessageBus;
+
+use chrono::Utc;
+use crate::message::{Message, MessageBus};
 use crate::{agent};
 use std::path::Path;
 use std::time::Duration;
+use serde_json::Value;
+use tokio::sync::mpsc;
 use tokio::time;
-
+use crate::action::Action;
+use crate::config::Config;
 
 /// World time management
 struct WorldTime {
@@ -31,10 +35,19 @@ impl WorldTime {
 }
 
 
-pub struct Simulation {}
+pub struct Simulation {
+
+    action_tx: mpsc::Sender<Action>,
+}
 
 impl Simulation {
-    pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
+
+    pub fn new(action_tx: mpsc::Sender<Action>) -> Self {
+        Self { action_tx }
+    }
+
+
+    pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         // Load configuration
         let config = match Config::load(Path::new("config.json")) {
             Ok(config) => config,
@@ -64,6 +77,14 @@ impl Simulation {
             msg_bus.register_agent(agent.clone());
             agents.push(agent);
         }
+
+        // Exemple d'envoi de message à l'UI
+        self.action_tx.send(Action::AddMessage(Message {
+            sender: "System".into(),
+            recipient: "UI".into(),
+            content: Value::String("Simulation started".into()),
+            timestamp: Utc::now(),
+        })).await?;
 
         // Main simulation loop
         let mut interval = time::interval(Duration::from_millis(100));
