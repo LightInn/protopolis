@@ -1,6 +1,7 @@
 // main.rs
 use std::path::Path;
 use std::time::Duration;
+use ollama_rs::Ollama;
 use tokio::time;
 
 mod action;
@@ -9,6 +10,7 @@ mod config;
 mod message;
 mod personality;
 mod state;
+mod prompt;
 
 use crate::config::Config;
 use crate::message::MessageBus;
@@ -46,6 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Config::default()
         }
     };
+
+
 
     // Initialize message bus
     let msg_bus = MessageBus::new();
