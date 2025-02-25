@@ -1,7 +1,6 @@
 // action.rs
 use crate::state::AgentState;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 
 /// Represents all possible actions an agent can take
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,7 +56,10 @@ impl ActionHandler {
     }
 
     /// Executes an action and returns the result
-    pub fn execute(&self, action: &Action) -> Result<ActionResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn execute(
+        &self,
+        action: &Action,
+    ) -> Result<ActionResult, Box<dyn std::error::Error + Send + Sync>> {
         match action {
             Action::Think { topic } => Ok(ActionResult {
                 success: true,

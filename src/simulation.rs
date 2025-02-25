@@ -1,12 +1,12 @@
+//simulations.rs
 use crate::agent;
 use crate::config::Config;
 use crate::message::MessageBus;
 use cli_log::{debug, info};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
-use tokio::task;
 use tokio::time;
 
 /// World time management
@@ -245,12 +245,9 @@ impl Simulation {
         let mut last_hour = 0;
 
         info!("Simulation démarrée");
-        simulation
-            .read()
-            .await
-            .send_event(SimulationEvent::Message(
-                "Début de la simulation".to_string(),
-            ));
+        simulation.read().await.send_event(SimulationEvent::Message(
+            "Début de la simulation".to_string(),
+        ));
 
         loop {
             interval.tick().await;

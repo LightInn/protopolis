@@ -1,3 +1,4 @@
+//main.rs
 mod action;
 mod agent;
 mod app;
@@ -9,7 +10,7 @@ mod simulation;
 mod state;
 
 use crate::app::App;
-use crate::simulation::{Simulation, SimulationEvent};
+use crate::simulation::SimulationEvent;
 use cli_log::*;
 use color_eyre::eyre::Result;
 use std::sync::{Arc, Mutex};

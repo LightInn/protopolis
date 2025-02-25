@@ -1,26 +1,26 @@
-use std::io;
-use std::sync::{Arc};
+//app.rs
+use crate::simulation::{Simulation, SimulationEvent};
 use crossterm::event;
-use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, KeyEvent};
-use ratatui::{DefaultTerminal, Frame};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Line, Stylize, Text};
 use ratatui::symbols::border;
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Tabs, Widget};
+use ratatui::{DefaultTerminal, Frame};
+use std::io;
+use std::sync::Arc;
 use task::spawn;
-use crate::simulation::{Simulation, SimulationEvent, SimulationState};
-use crate::message::Message;
 use tokio::sync::{mpsc, RwLock};
 use tokio::task;
 
 // États possibles de l'application
 #[derive(Debug, Clone, PartialEq)]
 enum AppState {
-    Initial,      // Écran d'accueil/configuration
-    Running,      // Simulation en cours
-    Paused,       // Simulation en pause
-    Configuration // Écran de configuration
+    Initial,       // Écran d'accueil/configuration
+    Running,       // Simulation en cours
+    Paused,        // Simulation en pause
+    Configuration, // Écran de configuration
 }
 
 // Onglets disponibles
@@ -28,7 +28,7 @@ enum AppState {
 enum TabState {
     Simulation = 0,
     Configuration = 1,
-    Logs = 2,     // Nouvel onglet pour les logs
+    Logs = 2, // Nouvel onglet pour les logs
 }
 
 #[derive(Debug)]
@@ -110,8 +110,8 @@ impl App {
         frame.render_widget(block, area);
 
         // Affichage du prompt
-        let prompt = Paragraph::new("Veuillez entrer un sujet de discussion pour les IA:")
-            .centered();
+        let prompt =
+            Paragraph::new("Veuillez entrer un sujet de discussion pour les IA:").centered();
         frame.render_widget(prompt, chunks[1]);
 
         // Champ de texte pour le sujet
@@ -121,10 +121,7 @@ impl App {
         frame.render_widget(input, chunks[2]);
 
         // Positionnement du curseur
-        frame.set_cursor(
-            chunks[2].x + 1 + self.cursor_position as u16,
-            chunks[2].y
-        );
+        frame.set_cursor(chunks[2].x + 1 + self.cursor_position as u16, chunks[2].y);
 
         // Instructions
         let instructions = Line::from(vec![
@@ -134,8 +131,7 @@ impl App {
             "<Esc/Q>".blue().bold(),
         ]);
 
-        let instructions_widget = Paragraph::new(instructions)
-            .centered();
+        let instructions_widget = Paragraph::new(instructions).centered();
         frame.render_widget(instructions_widget, chunks[3]);
     }
 
@@ -145,9 +141,9 @@ impl App {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Onglets
-                Constraint::Min(1),     // Contenu principal
-                Constraint::Length(1),  // Barre d'état
+                Constraint::Length(3), // Onglets
+                Constraint::Min(1),    // Contenu principal
+                Constraint::Length(1), // Barre d'état
             ])
             .split(area);
 
@@ -167,32 +163,32 @@ impl App {
                     .title(format!("Discussion sur le sujet: {}", self.topic))
                     .borders(Borders::ALL);
 
-                let messages_items: Vec<ListItem> = self.messages
+                let messages_items: Vec<ListItem> = self
+                    .messages
                     .iter()
                     .map(|msg| ListItem::new(msg.clone()))
                     .collect();
 
-                let messages_list = List::new(messages_items)
-                    .block(messages_block);
+                let messages_list = List::new(messages_items).block(messages_block);
 
                 frame.render_widget(messages_list, chunks[1]);
-            },
+            }
             TabState::Configuration => {
                 self.draw_configuration_content(frame, chunks[1]);
-            },
+            }
             TabState::Logs => {
                 // Affichage des logs
                 let logs_block = Block::default()
                     .title("Logs du système")
                     .borders(Borders::ALL);
 
-                let logs_items: Vec<ListItem> = self.logs
+                let logs_items: Vec<ListItem> = self
+                    .logs
                     .iter()
                     .map(|log| ListItem::new(log.clone()))
                     .collect();
 
-                let logs_list = List::new(logs_items)
-                    .block(logs_block);
+                let logs_list = List::new(logs_items).block(logs_block);
 
                 frame.render_widget(logs_list, chunks[1]);
             }
@@ -228,9 +224,9 @@ impl App {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Onglets
-                Constraint::Min(1),     // Contenu principal
-                Constraint::Length(1),  // Barre d'état
+                Constraint::Length(3), // Onglets
+                Constraint::Min(1),    // Contenu principal
+                Constraint::Length(1), // Barre d'état
             ])
             .split(area);
 
@@ -267,17 +263,15 @@ impl App {
         let config_text = Text::from(vec![
             Line::from("Configuration de la simulation:"),
             Line::from(""),
-            Line::from(vec![
-                "Sujet: ".into(),
-                self.topic.clone().yellow(),
-            ]),
+            Line::from(vec!["Sujet: ".into(), self.topic.clone().yellow()]),
             Line::from(""),
-            Line::from("Vous pouvez changer de sujet en retournant à l'écran initial (Q puis relancer)"),
+            Line::from(
+                "Vous pouvez changer de sujet en retournant à l'écran initial (Q puis relancer)",
+            ),
             // Vous pourriez ajouter d'autres paramètres ici
         ]);
 
-        let paragraph = Paragraph::new(config_text)
-            .block(block);
+        let paragraph = Paragraph::new(config_text).block(block);
 
         frame.render_widget(paragraph, area);
     }
@@ -296,7 +290,9 @@ impl App {
     async fn handle_key_event(&mut self, key_event: KeyEvent) {
         match self.state {
             AppState::Initial => self.handle_initial_key_event(key_event),
-            AppState::Running | AppState::Paused => self.handle_simulation_key_event(key_event).await,
+            AppState::Running | AppState::Paused => {
+                self.handle_simulation_key_event(key_event).await
+            }
             AppState::Configuration => self.handle_configuration_key_event(key_event),
         }
     }
@@ -308,27 +304,27 @@ impl App {
                 if !self.topic.is_empty() {
                     self.start_simulation();
                 }
-            },
+            }
             KeyCode::Char(c) => {
                 self.topic.insert(self.cursor_position, c);
                 self.cursor_position += 1;
-            },
+            }
             KeyCode::Backspace => {
                 if self.cursor_position > 0 {
                     self.cursor_position -= 1;
                     self.topic.remove(self.cursor_position);
                 }
-            },
+            }
             KeyCode::Left => {
                 if self.cursor_position > 0 {
                     self.cursor_position -= 1;
                 }
-            },
+            }
             KeyCode::Right => {
                 if self.cursor_position < self.topic.len() {
                     self.cursor_position += 1;
                 }
-            },
+            }
             _ => {}
         }
     }
@@ -389,14 +385,14 @@ impl App {
                     simulation.read().await.pause();
                 }
                 self.log("Simulation mise en pause".to_string());
-            },
+            }
             AppState::Paused => {
                 self.state = AppState::Running;
                 if let Some(simulation) = &self.simulation {
                     simulation.read().await.resume();
                 }
                 self.log("Simulation reprise".to_string());
-            },
+            }
             _ => {}
         }
     }

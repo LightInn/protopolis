@@ -97,7 +97,9 @@ impl Agent {
     }
 
     /// Génère une réponse en utilisant Ollama
-    async fn generate_response(&mut self) -> Result<Message, Box<dyn std::error::Error + Send + Sync>> {
+    async fn generate_response(
+        &mut self,
+    ) -> Result<Message, Box<dyn std::error::Error + Send + Sync>> {
         let mut retries = 3;
         let mut ollama = Ollama::default();
 
@@ -163,7 +165,10 @@ impl Agent {
     }
 
     /// Updates the agent's state and performs actions
-    pub async fn update(&mut self, current_tick: u64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn update(
+        &mut self,
+        current_tick: u64,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Consume energy over time
         self.consume_base_energy();
 
