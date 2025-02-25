@@ -2,6 +2,7 @@
 use crate::message::Message;
 use crate::simulation::Simulation;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::prelude::Rect;
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
@@ -12,7 +13,6 @@ use ratatui::{
 };
 use std::io;
 use std::sync::mpsc;
-use ratatui::prelude::Rect;
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
@@ -62,7 +62,10 @@ impl Default for App {
 }
 
 impl App {
-    pub async fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
+    pub async fn run(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
         while !matches!(self.state, AppState::Exit) {
             terminal.draw(|f| self.draw(f))?;
             self.handle_events().await?;
@@ -81,9 +84,10 @@ impl App {
             .split(frame.size());
 
         let tabs = Tabs::new(vec!["Messages", "Agents", "Configuration"])
-            .block(Block::default().borders(Borders::ALL)).select(self.current_tab)
-                       .style(Style::default().fg(Color::White))
-                       .highlight_style(Style::default().fg(Color::Yellow));
+            .block(Block::default().borders(Borders::ALL))
+            .select(self.current_tab)
+            .style(Style::default().fg(Color::White))
+            .highlight_style(Style::default().fg(Color::Yellow));
 
         frame.render_widget(tabs, chunks[0]);
 
@@ -107,7 +111,7 @@ impl App {
                 Style::default().fg(Color::Green),
             ),
         ]))
-            .block(Block::default().borders(Borders::ALL));
+        .block(Block::default().borders(Borders::ALL));
 
         frame.render_widget(status_bar, chunks[2]);
     }
@@ -116,13 +120,15 @@ impl App {
         let messages: Vec<Line> = self
             .messages
             .iter()
-            .map(|msg| Line::from(vec![
-                Span::styled(
-                    format!("{}: ", msg.sender),
-                    Style::default().fg(Color::Blue),
-                ),
-                Span::raw(msg.content.to_string()),
-            ]))
+            .map(|msg| {
+                Line::from(vec![
+                    Span::styled(
+                        format!("{}: ", msg.sender),
+                        Style::default().fg(Color::Blue),
+                    ),
+                    Span::raw(msg.content.to_string()),
+                ])
+            })
             .collect();
 
         let paragraph = Paragraph::new(messages)
@@ -137,13 +143,13 @@ impl App {
             .map(|agent| Line::from(vec![Span::raw(agent.clone())]))
             .collect();
 
-        let paragraph = Paragraph::new(agents)
-            .block(Block::default().borders(Borders::ALL).title("Agents"));
+        let paragraph =
+            Paragraph::new(agents).block(Block::default().borders(Borders::ALL).title("Agents"));
         frame.render_widget(paragraph, area);
     }
 
     fn draw_configuration_tab(&self, frame: &mut Frame, area: Rect) {
-        let topic_input = Paragraph::new(self.topic.as_str())  // Convertit explicitement en &str
+        let topic_input = Paragraph::new(self.topic.as_str()) // Convertit explicitement en &str
             .block(Block::default().borders(Borders::ALL).title("Topic"));
         frame.render_widget(topic_input, area);
     }
@@ -152,7 +158,10 @@ impl App {
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Press {
                 match key.code {
-                    KeyCode::Char('q') => self.action_tx.send(Action::Exit).unwrap(),
+                    KeyCode::Char('q') => {
+                        self.action_tx.send(Action::Exit).unwrap();
+                        self.state = AppState::Exit;
+                    }
                     KeyCode::Tab => {
                         self.current_tab = (self.current_tab + 1) % 3;
                     }
@@ -167,15 +176,15 @@ impl App {
                         }
                         AppState::Configuration => {
                             self.action_tx.send(Action::StartSimulation).unwrap();
+                            self.state = AppState::Running;
                         }
                         _ => {}
                     },
-                    KeyCode::Char(c) => match self.state {
-                        AppState::Configuration => {
+                    KeyCode::Char(c) => {
+                        if let AppState::Configuration = self.state {
                             self.topic.push(c);
                         }
-                        _ => {}
-                    },
+                    }
                     _ => {}
                 }
             }
