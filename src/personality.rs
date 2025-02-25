@@ -29,10 +29,8 @@ impl Personality {
 
     /// Sets a trait value, clamping it between -1.0 and 1.0
     pub fn set_trait(&mut self, trait_name: &str, value: f32) {
-        self.traits.insert(
-            trait_name.to_string(),
-            value.clamp(-1.0, 1.0)
-        );
+        self.traits
+            .insert(trait_name.to_string(), value.clamp(-1.0, 1.0));
     }
 
     /// Gets a trait value
@@ -66,7 +64,8 @@ impl Personality {
         }
 
         // Return index of highest scoring option
-        scores.iter()
+        scores
+            .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
             .map(|(index, _)| index)
@@ -91,6 +90,6 @@ pub fn get_personality_template(template_name: &str) -> Personality {
             personality.set_trait("extraversion", -0.3);
             personality
         }
-        _ => Personality::new("Default balanced personality")
+        _ => Personality::new("Default balanced personality"),
     }
 }
