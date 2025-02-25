@@ -9,7 +9,7 @@
 [![Downloads](https://img.shields.io/crates/d/protopolis?style=for-the-badge)](https://crates.io/crates/protopolis)
 
 <p align="center">
-  <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbTZ0emJ6eHlmbW9nN2x4cW1nY3d3bHh5a2V4d2x1Z2J5Y3F1c3V5ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26tn33aiTi1jkl6H6/giphy.gif" width="600" alt="Agents discussing philosophy">
+  <img src="https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExeWJ1OTNteDR2M2J0cmtnbGJsMDVtZXI5cDZrMHVma3ZmeW1wZmZiaiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/hywLjSvTsSREjlbbd7/giphy.gif" width="800" alt="Agents discussing philosophy">
 </p>
 
 ## 🌟 Features
