@@ -1,37 +1,96 @@
 // main.rs
-use crate::agent::Agent;
-use crate::messages::{Message, MessageBus};
+use std::path::Path;
+use std::time::Duration;
+use tokio::time;
 
+mod action;
 mod agent;
-mod messages;
-mod utils;
-mod world;
+mod config;
+mod message;
+mod personality;
+mod state;
+
+use crate::config::Config;
+use crate::message::MessageBus;
+
+/// World time management
+struct WorldTime {
+    current_tick: u64,
+    ticks_per_hour: u32,
+}
+
+impl WorldTime {
+    fn new(ticks_per_hour: u32) -> Self {
+        Self {
+            current_tick: 0,
+            ticks_per_hour,
+        }
+    }
+
+    fn increment(&mut self) {
+        self.current_tick += 1;
+    }
+
+    fn get_hour(&self) -> u64 {
+        self.current_tick / self.ticks_per_hour as u64
+    }
+}
 
 #[tokio::main]
-// add debug argument to the main function that can be passed to the program
-async fn main() {
-    // Initialisation
-    let msg_bus = MessageBus::new();
-
-    // Création des agents
-    let agent_alice = Agent::new(1, "Alice", "optimiste", msg_bus.clone());
-    let agent_bob = Agent::new(2, "Bob", "sceptique", msg_bus.clone());
-
-    // Enregistrement des agents dans le bus
-    msg_bus.register_agent(&agent_alice);
-    msg_bus.register_agent(&agent_bob);
-
-    // Envoi d'un message broadcast dans un rayon défini (ex: rayon 100)
-    let message = Message {
-        sender: "System".to_string(),
-        recipient: "".to_string(), // vide pour broadcast
-        content: "Salut à tous, prêt pour l'aventure ?".to_string(),
-        timestamp: 1,
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load configuration
+    let config = match Config::load(Path::new("config/config.json")) {
+        Ok(config) => config,
+        Err(_) => {
+            println!("No config file found, using default configuration");
+            Config::default()
+        }
     };
 
-    msg_bus.broadcast_system_message(message);
+    // Initialize message bus
+    let msg_bus = MessageBus::new();
 
-    // Traitement des messages pour chaque agent
-    agent_alice.process_messages();
-    agent_bob.process_messages();
+    // Initialize world time
+    let mut world_time = WorldTime::new(config.world.ticks_per_hour);
+
+    // Create agents from configuration
+    let mut agents = Vec::new();
+    for agent_config in &config.agents {
+        let agent = agent::Agent::new(
+            agent_config,
+            msg_bus.clone().into(),
+        );
+
+        msg_bus.register_agent(agent.clone());
+        agents.push(agent);
+    }
+
+    // Main simulation loop
+    let mut interval = time::interval(Duration::from_millis(100));
+    loop {
+        interval.tick().await;
+        world_time.increment();
+
+        println!("World time: Hour {}", world_time.get_hour());
+
+        // Update all agents
+        for agent in &agents {
+            let mut agent = agent.write().unwrap();
+            agent.update(world_time.current_tick).await?;
+            println!("{}: {:?}", agent.name, agent.get_state());
+            println!("{}: Energy: {}", agent.name, agent.get_energy());
+        }
+
+
+
+
+
+
+        // Optional: Break condition (e.g., after 24 simulation hours)
+        if world_time.get_hour() >= 1 {
+            break;
+        }
+    }
+
+    Ok(())
 }
