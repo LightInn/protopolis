@@ -1,11 +1,12 @@
 // agent.rs
+use cli_log::info;
 use crate::action::{Action, ActionHandler, ActionResult};
 use crate::config::AgentConfig;
 use crate::message::{Message, MessageBus};
+use crate::personality;
 use crate::personality::Personality;
 use crate::prompt::Prompt;
 use crate::state::AgentState;
-use crate::personality;
 use chrono::Utc;
 use colored::Colorize;
 use ollama_rs::generation::chat::request::ChatMessageRequest;
@@ -132,6 +133,8 @@ impl Agent {
                     self.name.bright_green(),
                     parsed.bright_white()
                 );
+
+                info!("{}: {}", self.name, parsed);
 
                 let message = Message {
                     sender: self.name.clone(),
@@ -284,6 +287,10 @@ impl Agent {
     pub fn get_position(&self) -> (i32, i32) {
         // self.position
         (0, 0)
+    }
+
+    pub fn set_topic(&mut self, topic: &String) {
+        self.next_prompt = topic.clone();
     }
 
     /// Gets the agent's current energy level
