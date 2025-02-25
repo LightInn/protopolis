@@ -315,7 +315,7 @@ impl App {
         self.exit = true;
     }
 
-    fn start_simulation(&mut self) {
+    async fn start_simulation(&mut self) {
         // Ici, vous allez initialiser votre simulation avec le sujet
         // Pour l'instant, nous allons simplement changer l'état
         self.state = AppState::Running;

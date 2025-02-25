@@ -40,5 +40,5 @@
       "system_prompt": "Alice is lying"
     }
   ],
-  "debug": false
+  "debug": true
 }
