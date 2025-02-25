@@ -8,6 +8,7 @@ mod personality;
 mod prompt;
 mod simulation;
 mod state;
+mod logging;
 
 use crate::app::App;
 use crate::simulation::SimulationEvent;

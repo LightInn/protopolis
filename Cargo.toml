@@ -22,4 +22,5 @@ color-eyre = "0.6.3"
 crossterm = "0.28.1"
 ratatui = "0.29.0"
 cli-log = "2.1.0"
+lazy_static = "1.5.0"
 

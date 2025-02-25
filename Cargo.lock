@@ -1058,6 +1058,7 @@ dependencies = [
  "color-eyre",
  "colored",
  "crossterm",
+ "lazy_static",
  "ollama-rs",
  "ratatui",
  "serde",
