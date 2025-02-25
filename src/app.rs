@@ -166,8 +166,14 @@ impl App {
                         self.current_tab = (self.current_tab + 1) % 3;
                     }
                     KeyCode::Char(' ') => match self.state {
-                        AppState::Running => self.action_tx.send(Action::PauseSimulation).unwrap(),
-                        AppState::Paused => self.action_tx.send(Action::ResumeSimulation).unwrap(),
+                        AppState::Running => {
+                            self.action_tx.send(Action::PauseSimulation).unwrap();
+                            self.state = AppState::Paused;
+                        }
+                        AppState::Paused => {
+                            self.action_tx.send(Action::ResumeSimulation).unwrap();
+                            self.state = AppState::Running;
+                        }
                         _ => {}
                     },
                     KeyCode::Enter => match self.state {
