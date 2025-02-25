@@ -2,6 +2,7 @@
 use crate::state::AgentState;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use crate::message::Message;
 
 /// Represents all possible actions an agent can take
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +25,13 @@ pub enum Action {
         duration: u32,
     },
     CheckTime,
+
+    StartSimulation,
+    PauseSimulation,
+    AddMessage(Message), // Ajoutez cette variante
+    UpdateTopic(String),
+    SwitchTab(usize),
+    Quit,
 }
 
 /// Result of an action execution
@@ -100,6 +108,7 @@ impl ActionHandler {
                 energy_delta: *self.energy_costs.get("CheckTime").unwrap(),
                 message: Some("Checking current time".to_string()),
             }),
+            _ => todo!(),
         }
     }
 
@@ -114,6 +123,7 @@ impl ActionHandler {
             Action::Move { .. } => *self.energy_costs.get("Move").unwrap(),
             Action::Sleep { .. } => 0.0, // Always allow sleep
             Action::CheckTime => *self.energy_costs.get("CheckTime").unwrap(),
+            _ => todo!(),
         };
 
         current_energy + cost >= 0.0
