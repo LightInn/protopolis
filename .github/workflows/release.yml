@@ -32,7 +32,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add Cargo.toml
-          git commit -m "chore: update version to $VERSION [skip ci]"
+          git commit -m "chore: ❇️⏫Version $VERSION⏫❇️[skip ci]"
           git push origin main
   build-windows:
     needs: update-version
