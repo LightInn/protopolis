@@ -3,6 +3,8 @@ use crate::action::{Action, ActionHandler, ActionResult};
 use crate::config::AgentConfig;
 use crate::message::{Message, MessageBus};
 use crate::personality::Personality;
+use crate::prompt;
+use crate::prompt::Prompt;
 use crate::state::AgentState;
 use chrono::Utc;
 use colored::Colorize;
@@ -26,6 +28,7 @@ pub struct Agent {
     pub conversation_history: Vec<ChatMessage>,
     pub memory: Vec<Message>,
     pub system_prompt: String,
+    pub next_prompt: String,
     pub message_queue: VecDeque<Message>,
 }
 
@@ -54,6 +57,7 @@ impl Agent {
             conversation_history: Vec::new(),
             memory: vec![],
             system_prompt: config.system_prompt.clone(),
+            next_prompt: "".to_string(),
             message_queue: Default::default(),
         }))
     }
@@ -61,9 +65,7 @@ impl Agent {
     /// Processes incoming messages for the agent
     pub fn process_messages(&mut self) {
         // Récupérer et vider la file de messages sous forme de Vec
-        let messages = {
-            self.message_queue.drain(..).collect::<Vec<_>>()
-        };
+        let messages = { self.message_queue.drain(..).collect::<Vec<_>>() };
 
         // Récupérer les informations nécessaires AVANT l'appel à broadcast_message
         let agent_name = self.name.clone();
@@ -71,7 +73,10 @@ impl Agent {
 
         // Maintenant, on peut traiter les messages sans verrou
         for message in messages {
-            println!("{} reçoit : {}", agent_name, message.content);
+            println!(
+                "{} reçoit de {} pour {} : {}",
+                agent_name, message.sender, message.recipient, message.content
+            );
             self.memory.push(message.clone());
             self.handle_message(message);
         }
@@ -90,10 +95,9 @@ impl Agent {
     /// Génère une réponse en utilisant Ollama
     async fn generate_response(
         &mut self,
-        ollama: &mut Ollama,
     ) -> Result<Message, Box<dyn std::error::Error>> {
-        let prompt = "test prompt";
         let mut retries = 3;
+        let mut ollama = Ollama::default();
 
         // Log coloré pour la génération de réponse
         println!(
@@ -108,7 +112,7 @@ impl Agent {
                     &mut self.conversation_history,
                     ChatMessageRequest::new(
                         "llama3.2:latest".to_string(),
-                        vec![ChatMessage::user(prompt.parse().unwrap())], // <- You should provide only one message
+                        vec![ChatMessage::user(self.next_prompt.clone())], // <- You should provide only one message
                     ),
                 )
                 .await;
@@ -128,7 +132,7 @@ impl Agent {
 
                 let message = Message {
                     sender: self.name.clone(),
-                    recipient: "".to_string(),
+                    recipient: "everyone".to_string(),
                     content: Value::String(parsed),
                     timestamp: Utc::now(),
                 };
@@ -156,8 +160,6 @@ impl Agent {
         // Process incoming messages
         self.process_messages();
 
-        println!("message processed");
-
         // Decide and perform next action
         self.decide_next_action(current_tick).await?;
 
@@ -166,13 +168,7 @@ impl Agent {
 
     /// Handles a single message
     fn handle_message(&mut self, message: Message) {
-        match message.content {
-            Value::String(content) => {
-                println!("{} received message: {}", self.name, content);
-                // Add more sophisticated message handling here
-            }
-            _ => println!("{} received non-string message", self.name),
-        }
+        self.next_prompt += &Prompt::get_message(message);
     }
 
     /// Decides and performs the next action based on current state and personality
@@ -180,7 +176,6 @@ impl Agent {
         &mut self,
         current_tick: u64,
     ) -> Result<(), Box<dyn std::error::Error>> {
-
         // Get available actions based on current state and energy
         let available_actions = self.get_available_actions();
 
@@ -198,6 +193,13 @@ impl Agent {
             let result = self.action_handler.execute(chosen_action)?;
             self.apply_action_result(result);
         }
+
+
+        // Generate a response using Ollama
+       let generated = self.generate_response().await?;
+
+        // Send the generated response
+        self.send_message(generated);
 
         Ok(())
     }
@@ -286,13 +288,7 @@ impl Agent {
     }
 
     /// Sends a message to another agent
-    pub fn send_message(&self, target_id: Option<Uuid>, content: String) {
-        let message = Message {
-            sender: "".to_string(),
-            content: Value::String(content),
-            timestamp: Utc::now(),
-            recipient: "".to_string(),
-        };
+    pub fn send_message(&self, message: Message) {
         self.message_bus.broadcast_message(message, 100);
     }
 
