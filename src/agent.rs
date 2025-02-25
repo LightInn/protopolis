@@ -9,10 +9,9 @@ use colored::Colorize;
 use ollama_rs::generation::chat::request::ChatMessageRequest;
 use ollama_rs::generation::chat::ChatMessage;
 use ollama_rs::Ollama;
-use serde::Serialize;
 use serde_json::Value;
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
 /// Represents an autonomous agent in the system

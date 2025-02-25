@@ -81,11 +81,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}: Energy: {}", agent.name, agent.get_energy());
         }
 
-
-
-
-
-
         // Optional: Break condition (e.g., after 24 simulation hours)
         if world_time.get_hour() >= 1 {
             break;
