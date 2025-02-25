@@ -5,7 +5,7 @@ use crate::message::{Message, MessageBus};
 use crate::personality::Personality;
 use crate::prompt::Prompt;
 use crate::state::AgentState;
-use crate::{personality, prompt};
+use crate::personality;
 use chrono::Utc;
 use colored::Colorize;
 use ollama_rs::generation::chat::request::ChatMessageRequest;

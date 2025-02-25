@@ -1,6 +1,4 @@
 // main.rs
-use log::debug;
-use ollama_rs::Ollama;
 use std::path::Path;
 use std::time::Duration;
 use tokio::time;
