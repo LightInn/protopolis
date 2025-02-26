@@ -1,12 +1,11 @@
-// simulation.rs
-
 use chrono::Utc;
 use crate::message::{Message, MessageBus};
 use crate::{agent};
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use serde_json::Value;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::time;
 use crate::action::Action;
 use crate::config::Config;
@@ -34,18 +33,21 @@ impl WorldTime {
     }
 }
 
-
+#[derive(Clone)]
 pub struct Simulation {
-
-    action_tx: mpsc::Sender<Action>,
+    message_bus: Arc<MessageBus>,
+    paused: Arc<Mutex<bool>>,
+    action_tx: mpsc::Sender<crate::app::Action>, // Ajouté pour envoyer des actions à l'UI
 }
 
 impl Simulation {
-
-    pub fn new(action_tx: mpsc::Sender<Action>) -> Self {
-        Self { action_tx }
+    pub fn new(message_bus: Arc<MessageBus>, action_tx: mpsc::Sender<crate::app::Action>) -> Self {
+        Self {
+            message_bus,
+            paused: Arc::new(Mutex::new(false)),
+            action_tx,
+        }
     }
-
 
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         // Load configuration
@@ -63,8 +65,6 @@ impl Simulation {
         if config.debug {
             println!("Debug is {}", config.debug);
         }
-        // Initialize message bus
-        let msg_bus = MessageBus::new(config.debug);
 
         // Initialize world time
         let mut world_time = WorldTime::new(config.world.ticks_per_hour);
@@ -72,32 +72,37 @@ impl Simulation {
         // Create agents from configuration
         let mut agents = Vec::new();
         for agent_config in &config.agents {
-            let agent = agent::Agent::new(agent_config, msg_bus.clone().into(), config.debug);
-
-            msg_bus.register_agent(agent.clone());
+            let agent = agent::Agent::new(agent_config, self.message_bus.clone(), config.debug);
+            self.message_bus.register_agent(agent.clone());
             agents.push(agent);
         }
 
         // Exemple d'envoi de message à l'UI
-        self.action_tx.send(Action::AddMessage(Message {
-            sender: "System".into(),
-            recipient: "UI".into(),
-            content: Value::String("Simulation started".into()),
-            timestamp: Utc::now(),
-        })).await?;
+        self.action_tx
+            .send(crate::app::Action::AddMessage(Message {
+                sender: "System".into(),
+                recipient: "UI".into(),
+                content: Value::String("Simulation started".into()),
+                timestamp: Utc::now(),
+            }))
+            .await?;
 
         // Main simulation loop
         let mut interval = time::interval(Duration::from_millis(100));
         loop {
+            if *self.paused.lock().await {
+                continue;
+            }
             interval.tick().await;
             world_time.increment();
 
             if config.debug {
                 println!("World time: Hour {}", world_time.get_hour());
             }
+
             // Update all agents
             for agent in &agents {
-                let mut agent = agent.write().unwrap();
+                let mut agent = agent.write().await;
                 agent.update(world_time.current_tick).await?;
 
                 if config.debug {
@@ -113,5 +118,10 @@ impl Simulation {
         }
 
         Ok(())
+    }
+
+    pub fn toggle_pause(&self) {
+        let mut paused = self.paused.blocking_lock();
+        *paused = !*paused;
     }
 }

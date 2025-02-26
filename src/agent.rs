@@ -13,7 +13,8 @@ use ollama_rs::generation::chat::ChatMessage;
 use ollama_rs::Ollama;
 use serde_json::Value;
 use std::collections::VecDeque;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Represents an autonomous agent in the system

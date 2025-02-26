@@ -1,5 +1,4 @@
-// app.rs
-use crate::message::Message;
+use crate::message::{Message, MessageBus};
 use crate::simulation::Simulation;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::prelude::Rect;
@@ -12,8 +11,8 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::io;
-use std::sync::mpsc;
-use tokio::sync::Mutex;
+use std::sync::{ Arc};
+use tokio::sync::{mpsc, Mutex};
 
 #[derive(Debug, Clone)]
 pub enum AppState {
@@ -32,6 +31,10 @@ pub enum Action {
     SetTopic(String),
     SendMessage(String),
     Exit,
+    AddMessage(Message), // Ajoutez cette variante
+    UpdateTopic(String),
+    SwitchTab(usize),
+    Quit,
 }
 
 pub struct App {
@@ -40,14 +43,15 @@ pub struct App {
     messages: Vec<Message>,
     agents: Vec<String>,
     current_tab: usize,
-    simulation: Option<Simulation>,
-    action_tx: mpsc::Sender<Action>,
-    action_rx: mpsc::Receiver<Action>,
+    simulation: Option<Arc<Mutex<Simulation>>>, // Simulation est maintenant dans un Arc<Mutex>
+        action_tx: mpsc::Sender<Action>,
+        action_rx: mpsc::Receiver<Action>,
+        message_bus: Arc<MessageBus>,
 }
 
 impl Default for App {
     fn default() -> Self {
-        let (action_tx, action_rx) = mpsc::channel();
+        let (action_tx, action_rx) = mpsc::channel(32);
         Self {
             state: AppState::Welcome,
             topic: String::new(),
@@ -57,16 +61,17 @@ impl Default for App {
             simulation: None,
             action_tx,
             action_rx,
+            message_bus: MessageBus::new(false),
         }
     }
 }
 
 impl App {
-    pub async fn run(
-        &mut self,
-        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    ) -> io::Result<()> {
+    pub async fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
         while !matches!(self.state, AppState::Exit) {
+            let messages = self.message_bus.get_recent_messages();
+            self.messages = messages.await.iter().cloned().collect();
+
             terminal.draw(|f| self.draw(f))?;
             self.handle_events().await?;
         }
@@ -111,7 +116,7 @@ impl App {
                 Style::default().fg(Color::Green),
             ),
         ]))
-        .block(Block::default().borders(Borders::ALL));
+            .block(Block::default().borders(Borders::ALL));
 
         frame.render_widget(status_bar, chunks[2]);
     }
@@ -143,13 +148,13 @@ impl App {
             .map(|agent| Line::from(vec![Span::raw(agent.clone())]))
             .collect();
 
-        let paragraph =
-            Paragraph::new(agents).block(Block::default().borders(Borders::ALL).title("Agents"));
+        let paragraph = Paragraph::new(agents)
+            .block(Block::default().borders(Borders::ALL).title("Agents"));
         frame.render_widget(paragraph, area);
     }
 
     fn draw_configuration_tab(&self, frame: &mut Frame, area: Rect) {
-        let topic_input = Paragraph::new(self.topic.as_str()) // Convertit explicitement en &str
+        let topic_input = Paragraph::new(self.topic.as_str())
             .block(Block::default().borders(Borders::ALL).title("Topic"));
         frame.render_widget(topic_input, area);
     }
@@ -159,7 +164,7 @@ impl App {
             if key.kind == KeyEventKind::Press {
                 match key.code {
                     KeyCode::Char('q') => {
-                        self.action_tx.send(Action::Exit).unwrap();
+                        self.action_tx.send(Action::Exit).await.unwrap();
                         self.state = AppState::Exit;
                     }
                     KeyCode::Tab => {
@@ -167,11 +172,11 @@ impl App {
                     }
                     KeyCode::Char(' ') => match self.state {
                         AppState::Running => {
-                            self.action_tx.send(Action::PauseSimulation).unwrap();
+                            self.action_tx.send(Action::PauseSimulation).await.unwrap();
                             self.state = AppState::Paused;
                         }
                         AppState::Paused => {
-                            self.action_tx.send(Action::ResumeSimulation).unwrap();
+                            self.action_tx.send(Action::ResumeSimulation).await.unwrap();
                             self.state = AppState::Running;
                         }
                         _ => {}
@@ -181,7 +186,23 @@ impl App {
                             self.state = AppState::Configuration;
                         }
                         AppState::Configuration => {
-                            self.action_tx.send(Action::StartSimulation).unwrap();
+                            // Cloner les données nécessaires pour éviter de capturer `self`
+                            let message_bus_clone = self.message_bus.clone();
+                            let action_tx_clone = self.action_tx.clone();
+
+                            // Créer la simulation
+                            let simulation = Simulation::new(message_bus_clone, action_tx_clone);
+                            let simulation_arc = Arc::new(Mutex::new(simulation));
+
+                            // Démarrer la simulation dans un thread séparé
+                            let simulation_arc_clone = simulation_arc.clone();
+                            tokio::spawn(async move {
+                                let mut sim = simulation_arc_clone.lock().await;
+                                sim.run().await.expect("Simulation failed");
+                            });
+
+                            // Mettre à jour l'état de l'application
+                            self.simulation = Some(simulation_arc);
                             self.state = AppState::Running;
                         }
                         _ => {}
