@@ -25,13 +25,6 @@ pub enum Action {
         duration: u32,
     },
     CheckTime,
-
-    StartSimulation,
-    PauseSimulation,
-    AddMessage(Message), // Ajoutez cette variante
-    UpdateTopic(String),
-    SwitchTab(usize),
-    Quit,
 }
 
 /// Result of an action execution
