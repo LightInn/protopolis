@@ -18,6 +18,18 @@ impl UI {
     }
 
     pub fn run(&mut self) {
+        //clear terminal 
+        print!("\x1B[2J\x1B[1;1H");
+        io::stdout().flush().unwrap();
+        
+        println!("\n\n");
+        println!("██████╗ ██████╗  ██████╗ ████████╗ ██████╗ ██████╗  ██████╗ ██╗     ██╗███████╗");
+        println!("██╔══██╗██╔══██╗██╔═══██╗╚══██╔══╝██╔═══██╗██╔══██╗██╔═══██╗██║     ██║██╔════╝");
+        println!("██████╔╝██████╔╝██║   ██║   ██║   ██║   ██║██████╔╝██║   ██║██║     ██║███████╗");
+        println!("██╔═══╝ ██╔══██╗██║   ██║   ██║   ██║   ██║██╔═══╝ ██║   ██║██║     ██║╚════██║");
+        println!("██║     ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║     ╚██████╔╝███████╗██║███████║");
+        println!("╚═╝     ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝      ╚═════╝ ╚══════╝╚═╝╚══════╝");
+        println!("\n\n");
         println!("=== Simulation d'Agents avec Communication Ollama ===");
         println!("Commandes disponibles:");
         println!("  start - Démarrer la simulation");
