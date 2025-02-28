@@ -134,3 +134,58 @@ impl Agent {
         }
     }
 }
+
+#[test]
+fn test_agent_creation() {
+    let personality = Personality {
+        openness: 0.8,
+        conscientiousness: 0.6,
+        extraversion: 0.4,
+        agreeableness: 0.7,
+        neuroticism: 0.5,
+    };
+    let agent = Agent::new("1".to_string(), "TestAgent".to_string(), personality, 100.0, (0, 0));
+
+    assert_eq!(agent.id, "1");
+    assert_eq!(agent.name, "TestAgent");
+    assert_eq!(agent.state, AgentState::Idle);
+    assert_eq!(agent.energy, 0.0);
+    assert_eq!(agent.position, (0, 0));
+    assert!(agent.memory.is_empty());
+    assert!(agent.conversation_history.is_empty());
+    assert_eq!(agent.ollama_model, "llama2");
+}
+
+#[test]
+fn test_set_model() {
+    let mut agent = Agent::new("1".to_string(), "TestAgent".to_string(), Personality {
+        openness: 0.5,
+        conscientiousness: 0.5,
+        extraversion: 0.5,
+        agreeableness: 0.5,
+        neuroticism: 0.5,
+    }, 100.0, (0, 0));
+
+    agent.set_model("gpt4".to_string());
+    assert_eq!(agent.ollama_model, "gpt4");
+}
+
+#[tokio::test]
+async fn test_generate_response() {
+    let agent = Agent::new(
+        "1".to_string(),
+        "TestAgent".to_string(),
+        Personality {
+            openness: 0.8,
+            conscientiousness: 0.6,
+            extraversion: 0.4,
+            agreeableness: 0.7,
+            neuroticism: 0.5,
+        },
+        100.0,
+        (0, 0),
+    );
+    let response = agent.generate_response("Bonjour! Comment ça va?").await;
+
+    assert!(response.is_err());
+}
