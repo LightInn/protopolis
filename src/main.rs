@@ -1,10 +1,4 @@
-use std::path::Path;
-use crate::config::Config;
-use crate::simulation::Simulation;
-use crate::ui::UI;
-
 // main.rs
-mod action;
 mod agent;
 mod config;
 mod message;
@@ -13,34 +7,41 @@ mod simulation;
 mod state;
 mod ui;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+use crate::config::Config;
+use crate::simulation::{Simulation, SimulationToUI, UIToSimulation};
+use crate::ui::UI;
+use std::path::Path;
+use std::sync::mpsc;
+// main.rs (suite)
+use std::thread;
+
+fn main() {
     // Charger la configuration
-    let config = match Config::load(Path::new("config.json")) {
+    let config_path = Path::new("config.json");
+    let config = match Config::load(config_path) {
         Ok(config) => config,
-        Err(_) => {
-            let default_config = Config::default();
-            default_config.save(Path::new("config.json"))?;
-            default_config
+        Err(e) => {
+            eprintln!("Erreur lors du chargement de la configuration: {}", e);
+            return;
         }
     };
 
-    // Créer les canaux de communication entre UI et simulation
-    let (ui_tx, ui_rx) = std::sync::mpsc::channel();
-    let (sim_tx, sim_rx) = std::sync::mpsc::channel();
+    // Créer les canaux de communication
+    let (ui_tx, sim_rx) = mpsc::channel();
+    let (sim_tx, ui_rx) = mpsc::channel();
 
-    // Démarrer la simulation dans un thread séparé
-    let sim_config = config.clone();
-    let simulation_handle = std::thread::spawn(move || {
-        let mut simulation = Simulation::new(sim_config, ui_tx);
-        simulation.run(sim_rx);
+    // Créer et démarrer la simulation dans un thread séparé
+    let simulation_thread = thread::spawn(move || {
+        let mut simulation = Simulation::new(config, sim_tx, sim_rx);
+        simulation.run();
     });
 
-    // Démarrer l'interface utilisateur dans le thread principal
-    let mut ui = UI::new(sim_tx, ui_rx)?;
-    ui.run()?;
+    // Créer et démarrer l'interface utilisateur
+    let mut ui = UI::new(ui_tx, ui_rx);
+    ui.run();
 
     // Attendre que le thread de simulation se termine
-    simulation_handle.join().unwrap();
-
-    Ok(())
+    if let Err(e) = simulation_thread.join() {
+        eprintln!("Erreur lors de la jointure du thread de simulation: {:?}", e);
+    }
 }

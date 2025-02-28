@@ -1,102 +1,136 @@
 // agent.rs
-use crate::action::{Action, ActionHandler};
-use crate::config::AgentConfig;
-use crate::message::Message;
+use crate::message::{Message, MessageContent};
 use crate::personality::Personality;
 use crate::state::AgentState;
 use chrono::Utc;
-use serde_json::Value;
-use std::collections::VecDeque;
+use ollama_rs::Ollama;
+use ollama_rs::generation::completion::{request::GenerationRequest, GenerationContext};
+use serde_json::json;
+use std::sync::Arc;
+use tokio::runtime::Runtime;
 
+#[derive(Debug, Clone)]
 pub struct Agent {
+    pub id: String,
     pub name: String,
+    pub state: AgentState,
+    pub energy: f32,
+    pub position: (i32, i32),
     pub personality: Personality,
-    state: AgentState,
-    action_handler: ActionHandler,
-    messages: VecDeque<Message>,
-    energy: f32,
-    position: (i32, i32),
-    debug: bool,
+    pub memory: Vec<String>,
+    pub conversation_history: Vec<String>,
+    pub ollama_model: String,
 }
 
 impl Agent {
-    pub fn new(config: &AgentConfig, debug: bool) -> Self {
+    pub fn new(
+        id: String,
+        name: String,
+        personality: Personality,
+        initial_energy: f32,
+        initial_position: (i32, i32),
+    ) -> Self {
         Self {
-            name: config.name.clone(),
-            personality: crate::personality::get_personality_template(&config.personality_template),
+            id,
+            name,
             state: AgentState::Idle,
-            action_handler: ActionHandler::new(),
-            messages: VecDeque::new(),
-            energy: config.initial_energy,
-            position: config.initial_position,
-            debug,
+            energy: 0.0,
+            position: initial_position,
+            personality,
+            memory: Vec::new(),
+            conversation_history: Vec::new(),
+            ollama_model: "llama2".to_string(), // Modèle par défaut
         }
     }
 
-    pub fn update(&mut self, current_tick: u64) {
-        // Consommer de l'énergie
-        self.energy -= 0.1;
+    pub fn set_model(&mut self, model: String) {
+        self.ollama_model = model;
+    }
 
-        // Décider de la prochaine action
-        let action = self.decide_next_action();
+    pub fn process_message(&mut self, message: &Message, runtime: &Runtime) -> Option<Message> {
+        // Mettre à jour l'état
+        self.state = AgentState::Thinking;
 
-        // Exécuter l'action
-        if let Ok(result) = self.action_handler.execute(&action) {
-            self.state = result.new_state;
-            self.energy += result.energy_delta;
+        // Ajouter le message à l'historique de conversation
+        let msg_entry = format!("{}: {}", message.sender, message.content);
+        self.conversation_history.push(msg_entry);
 
-            if self.debug && result.message.is_some() {
-                println!("{}: {}", self.name, result.message.unwrap());
-            }
+        // Limiter l'historique à 10 messages pour éviter des prompts trop longs
+        if self.conversation_history.len() > 10 {
+            self.conversation_history.remove(0);
         }
 
-        // Générer un message (simulation simplifiée)
-        if current_tick % 10 == 0 {
-            self.messages.push_back(Message {
-                sender: self.name.clone(),
-                recipient: "everyone".to_string(),
-                content: Value::String(format!("Tick {}: I'm currently {:?}", current_tick, self.state)),
+        // Générer une réponse avec Ollama
+        let response = runtime.block_on(async {
+            self.generate_response(&message.content.to_string()).await
+        });
+
+        if let Ok(response_text) = response {
+            // Ajouter notre réponse à l'historique
+            self.conversation_history.push(format!("{}: {}", self.name, response_text));
+
+            // Créer un nouveau message
+            let response_message = Message {
+                id: uuid::Uuid::new_v4().to_string(),
                 timestamp: Utc::now(),
-            });
-        }
-    }
+                sender: self.name.clone(),
+                recipient: message.sender.clone(),
+                content: json!(response_text),
+            };
 
-    fn decide_next_action(&self) -> Action {
-        // Logique simplifiée pour décider de l'action
-        if self.energy < 30.0 {
-            Action::Sleep { duration: 10 }
+            // Mettre à jour l'état
+            self.state = AgentState::Speaking;
+            self.energy -= 1.0; // Parler consomme de l'énergie
+
+            Some(response_message)
         } else {
-            let actions = vec![
-                Action::Think { topic: "next move".to_string() },
-                Action::Listen { duration: 5 },
-                Action::Speak { message: "Hello!".to_string(), target: None },
-            ];
-
-            let chosen_index = self.personality.influence_decision(
-                &actions.iter().map(|a| format!("{:?}", a)).collect::<Vec<_>>()
-            );
-
-            actions[chosen_index].clone()
+            // En cas d'erreur, on passe à l'état Idle
+            self.state = AgentState::Idle;
+            None
         }
     }
 
-    pub fn get_messages(&mut self) -> Vec<Message> {
-        let mut messages = Vec::new();
-        while let Some(msg) = self.messages.pop_front() {
-            messages.push(msg);
+    async fn generate_response(&self, input: &str) -> Result<String, String> {
+        let ollama = Ollama::default();
+
+        // Construire le prompt avec la personnalité et l'historique de conversation
+        let personality_desc = format!(
+            "Tu es {}, un agent avec les traits de personnalité suivants:\n\
+            - Ouverture d'esprit: {}/10\n\
+            - Conscienciosité: {}/10\n\
+            - Extraversion: {}/10\n\
+            - Agréabilité: {}/10\n\
+            - Névrosisme: {}/10\n\
+            Réponds de manière concise (max 2-3 phrases) en respectant ta personnalité.",
+            self.name,
+            (self.personality.openness * 10.0) as i32,
+            (self.personality.conscientiousness * 10.0) as i32,
+            (self.personality.extraversion * 10.0) as i32,
+            (self.personality.agreeableness * 10.0) as i32,
+            (self.personality.neuroticism * 10.0) as i32
+        );
+
+        // Construire l'historique de conversation
+        let history = self.conversation_history.join("\n");
+
+        // Prompt final
+        let prompt = format!(
+            "{}\n\nHistorique de conversation:\n{}\n\nRéponds à: {}",
+            personality_desc,
+            history,
+            input
+        );
+
+        // Créer la requête
+        let request = GenerationRequest::new(self.ollama_model.clone(), prompt);
+
+        // Envoyer la requête
+        match ollama.generate(request).await {
+            Ok(response) => {
+                println!("{}", response.response);
+                Ok(response.response)   
+            },
+            Err(e) => Err(format!("Erreur lors de la génération: {}", e))
         }
-        messages
-    }
-
-    pub fn get_state(&self) -> &AgentState {
-        &self.state
-    }
-
-    pub fn get_energy(&self) -> f32 {
-        self.energy
-    }
-
-    pub fn get_position(&self) -> (i32, i32) {
-        self.position
     }
 }
