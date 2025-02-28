@@ -1,127 +1,126 @@
-use chrono::Utc;
-use crate::message::{Message, MessageBus};
-use crate::{agent};
-use std::path::Path;
-use std::sync::Arc;
+// simulation.rs
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
-use serde_json::Value;
-use tokio::sync::{mpsc, Mutex};
-use tokio::time;
-use crate::action::Action;
+use std::thread;
+
+use crate::agent::Agent;
 use crate::config::Config;
+use crate::message::Message;
 
-/// World time management
-struct WorldTime {
-    current_tick: u64,
-    ticks_per_hour: u32,
+// Messages de l'UI vers la simulation
+pub enum UIToSimulation {
+    Start,
+    Pause,
+    Resume,
+    Stop,
+    SetConfig(String),
 }
 
-impl WorldTime {
-    fn new(ticks_per_hour: u32) -> Self {
-        Self {
-            current_tick: 0,
-            ticks_per_hour,
-        }
-    }
-
-    fn increment(&mut self) {
-        self.current_tick += 1;
-    }
-
-    fn get_hour(&self) -> u64 {
-        self.current_tick / self.ticks_per_hour as u64
-    }
+// Messages de la simulation vers l'UI
+pub enum SimulationToUI {
+    Status(String),
+    AgentUpdate(String, String, u32), // nom, état, énergie
+    Messages(Vec<Message>),
+    Tick(u64),
 }
 
-#[derive(Clone)]
 pub struct Simulation {
-    message_bus: Arc<MessageBus>,
-    paused: Arc<Mutex<bool>>,
-    action_tx: mpsc::Sender<crate::app::Action>, // Ajouté pour envoyer des actions à l'UI
+    config: Config,
+    agents: Vec<Agent>,
+    ui_tx: Sender<SimulationToUI>,
+    running: bool,
+    paused: bool,
+    current_tick: u64,
 }
 
 impl Simulation {
-    pub fn new(message_bus: Arc<MessageBus>, action_tx: mpsc::Sender<crate::app::Action>) -> Self {
+    pub fn new(config: Config, ui_tx: Sender<SimulationToUI>) -> Self {
+        // Créer les agents à partir de la configuration
+        let agents = config.agents
+            .iter()
+            .map(|agent_config| Agent::new(agent_config, config.debug))
+            .collect();
+
         Self {
-            message_bus,
-            paused: Arc::new(Mutex::new(false)),
-            action_tx,
+            config,
+            agents,
+            ui_tx,
+            running: false,
+            paused: false,
+            current_tick: 0,
         }
     }
 
-    pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-        // Load configuration
-        let config = match Config::load(Path::new("config.json")) {
-            Ok(config) => config,
-            Err(e) => {
-                println!("Error loading config: {}", e);
-                println!("No config cannot be loaded, using default configuration");
-                let conf = Config::default();
-                conf.save(Path::new("config.json"))?;
-                conf
-            }
-        };
+    pub fn run(&mut self, rx: Receiver<UIToSimulation>) {
+        // Envoyer un statut initial
+        let _ = self.ui_tx.send(SimulationToUI::Status("Simulation prête".to_string()));
 
-        if config.debug {
-            println!("Debug is {}", config.debug);
-        }
-
-        // Initialize world time
-        let mut world_time = WorldTime::new(config.world.ticks_per_hour);
-
-        // Create agents from configuration
-        let mut agents = Vec::new();
-        for agent_config in &config.agents {
-            let agent = agent::Agent::new(agent_config, self.message_bus.clone(), config.debug);
-            self.message_bus.register_agent(agent.clone());
-            agents.push(agent);
-        }
-
-        // Exemple d'envoi de message à l'UI
-        self.action_tx
-            .send(crate::app::Action::AddMessage(Message {
-                sender: "System".into(),
-                recipient: "UI".into(),
-                content: Value::String("Simulation started".into()),
-                timestamp: Utc::now(),
-            }))
-            .await?;
-
-        // Main simulation loop
-        let mut interval = time::interval(Duration::from_millis(100));
+        // Boucle principale
         loop {
-            if *self.paused.lock().await {
-                continue;
-            }
-            interval.tick().await;
-            world_time.increment();
-
-            if config.debug {
-                println!("World time: Hour {}", world_time.get_hour());
-            }
-
-            // Update all agents
-            for agent in &agents {
-                let mut agent = agent.write().await;
-                agent.update(world_time.current_tick).await?;
-
-                if config.debug {
-                    println!("{}: {:?}", agent.name, agent.get_state());
-                    println!("{}: Energy: {}", agent.name, agent.get_energy());
+            // Vérifier les messages de l'UI
+            if let Ok(message) = rx.try_recv() {
+                match message {
+                    UIToSimulation::Start => {
+                        self.running = true;
+                        self.paused = false;
+                        let _ = self.ui_tx.send(SimulationToUI::Status("Simulation démarrée".to_string()));
+                    }
+                    UIToSimulation::Pause => {
+                        self.paused = true;
+                        let _ = self.ui_tx.send(SimulationToUI::Status("Simulation en pause".to_string()));
+                    }
+                    UIToSimulation::Resume => {
+                        self.paused = false;
+                        let _ = self.ui_tx.send(SimulationToUI::Status("Simulation reprise".to_string()));
+                    }
+                    UIToSimulation::Stop => {
+                        self.running = false;
+                        let _ = self.ui_tx.send(SimulationToUI::Status("Simulation arrêtée".to_string()));
+                        break;
+                    }
+                    UIToSimulation::SetConfig(config_str) => {
+                        // Traiter la configuration
+                        let _ = self.ui_tx.send(SimulationToUI::Status(format!("Configuration reçue: {}", config_str)));
+                    }
                 }
             }
 
-            // Optional: Break condition (e.g., after 24 simulation hours)
-            if world_time.get_hour() >= 1 {
-                break;
+            // Si la simulation est en cours et non en pause
+            if self.running && !self.paused {
+                // Incrémenter le tick
+                self.current_tick += 1;
+
+                // Mettre à jour les agents
+                let mut all_messages = Vec::new();
+
+                for agent in &mut self.agents {
+                    agent.update(self.current_tick);
+
+                    // Envoyer les mises à jour d'état
+                    let _ = self.ui_tx.send(SimulationToUI::AgentUpdate(
+                        agent.name.clone(),
+                        format!("{:?}", agent.get_state()),
+                        agent.get_energy() as u32
+                    ));
+
+                    // Collecter les messages
+                    all_messages.extend(agent.get_messages());
+                }
+
+                // Envoyer tous les messages à l'UI
+                if !all_messages.is_empty() {
+                    let _ = self.ui_tx.send(SimulationToUI::Messages(all_messages));
+                }
+
+                // Envoyer le tick actuel
+                let _ = self.ui_tx.send(SimulationToUI::Tick(self.current_tick));
+
+                // Attendre avant le prochain tick
+                thread::sleep(Duration::from_millis(1000 / self.config.world.ticks_per_hour as u64));
+            } else {
+                // Si en pause ou non démarré, attendre un peu avant de vérifier à nouveau
+                thread::sleep(Duration::from_millis(100));
             }
         }
-
-        Ok(())
-    }
-
-    pub fn toggle_pause(&self) {
-        let mut paused = self.paused.blocking_lock();
-        *paused = !*paused;
     }
 }
