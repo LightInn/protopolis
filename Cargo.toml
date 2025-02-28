@@ -22,4 +22,5 @@ chrono = { version = "0.4.19", features = ["serde"] }
 color-eyre = "0.6.3"
 crossterm = "0.28.1"
 ratatui = "0.29.0"
+rand = "0.9.0"
 

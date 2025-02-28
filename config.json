@@ -1,44 +1,38 @@
 {
   "world": {
+    "width": 100,
+    "height": 100,
     "ticks_per_hour": 60,
-    "world_size": [
-      1000,
-      1000
-    ],
-    "max_broadcast_range": 100,
-    "base_energy_consumption": 0.1
+    "hours_per_day": 24
   },
   "agents": [
     {
       "name": "Alice",
-      "personality_template": "optimistic",
-      "initial_position": [
-        0,
-        0
-      ],
+      "personality_template": "friendly",
       "initial_energy": 100.0,
-      "system_prompt": "Bob have a terrible secret"
-    },
-    {
-      "name": "Bob",
-      "personality_template": "analytical",
       "initial_position": [
         10,
         10
-      ],
-      "initial_energy": 100.0,
-      "system_prompt": "Alice is lying"
+      ]
     },
     {
-      "name": "Charlie",
-      "personality_template": "pessimistic",
+      "name": "Bob",
+      "personality_template": "curious",
+      "initial_energy": 100.0,
       "initial_position": [
         20,
         20
-      ],
+      ]
+    },
+    {
+      "name": "Charlie",
+      "personality_template": "cautious",
       "initial_energy": 100.0,
-      "system_prompt": "Alice is lying"
+      "initial_position": [
+        30,
+        30
+      ]
     }
   ],
-  "debug": false
+  "debug": true
 }
