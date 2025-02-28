@@ -239,3 +239,34 @@ impl Simulation {
         }
     }
 }
+
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    fn setup_simulation() -> (Simulation, Sender<UIToSimulation>, Receiver<SimulationToUI>) {
+        let config = Config::default(); // Assurez-vous d'avoir une implémentation par défaut pour les tests
+        let (ui_tx, ui_rx) = mpsc::channel();
+        let (sim_tx, sim_rx) = mpsc::channel();
+        let simulation = Simulation::new(config, ui_tx, sim_rx);
+        (simulation, sim_tx, ui_rx)
+    }
+
+    #[test]
+    fn test_tick_updates() {
+        let (mut simulation, sim_tx, ui_rx) = setup_simulation();
+        sim_tx.send(UIToSimulation::Start).unwrap();
+
+        std::thread::spawn(move || {
+            simulation.run();
+        });
+
+        let response = ui_rx.recv_timeout(Duration::from_secs(1));
+        assert!(matches!(response, Ok(SimulationToUI::TickUpdate(_))));
+    }
+}
