@@ -1,126 +1,241 @@
 // simulation.rs
-use std::sync::mpsc::{Receiver, Sender};
-use std::time::Duration;
-use std::thread;
-
 use crate::agent::Agent;
 use crate::config::Config;
-use crate::message::Message;
+use crate::message::{Message, MessageContent};
+use crate::personality::get_personality_template;
+use crate::state::AgentState;
+use chrono::Utc;
+use serde_json::json;
+use std::collections::HashMap;
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
+use std::time::{Duration, Instant};
+use tokio::runtime::Runtime;
+use uuid::Uuid;
 
-// Messages de l'UI vers la simulation
 pub enum UIToSimulation {
     Start,
     Pause,
     Resume,
     Stop,
-    SetConfig(String),
+    SetDiscussionTopic(String),
 }
 
-// Messages de la simulation vers l'UI
 pub enum SimulationToUI {
-    Status(String),
-    AgentUpdate(String, String, u32), // nom, état, énergie
-    Messages(Vec<Message>),
-    Tick(u64),
+    TickUpdate(u64),
+    AgentUpdate(String, AgentState, f32),
+    MessageUpdate(Message),
+    StateUpdate(String),
 }
 
 pub struct Simulation {
     config: Config,
-    agents: Vec<Agent>,
-    ui_tx: Sender<SimulationToUI>,
-    running: bool,
-    paused: bool,
+    agents: HashMap<String, Agent>,
+    messages: Vec<Message>,
     current_tick: u64,
+    running: bool,
+    ui_tx: Sender<SimulationToUI>,
+    sim_rx: Receiver<UIToSimulation>,
+    discussion_topic: Option<String>,
+    runtime: Runtime,
 }
 
 impl Simulation {
-    pub fn new(config: Config, ui_tx: Sender<SimulationToUI>) -> Self {
-        // Créer les agents à partir de la configuration
-        let agents = config.agents
-            .iter()
-            .map(|agent_config| Agent::new(agent_config, config.debug))
-            .collect();
+    pub fn new(
+        config: Config,
+        ui_tx: Sender<SimulationToUI>,
+        sim_rx: Receiver<UIToSimulation>,
+    ) -> Self {
+        // Créer un runtime Tokio pour les appels asynchrones à Ollama
+        let runtime = Runtime::new().expect("Failed to create Tokio runtime");
+
+        // Initialiser les agents à partir de la configuration
+        let mut agents = HashMap::new();
+        for agent_config in &config.agents {
+            let id = Uuid::new_v4().to_string();
+            let personality = get_personality_template(&agent_config.personality_template);
+
+            let mut agent = Agent::new(
+                id.clone(),
+                agent_config.name.clone(),
+                personality,
+                agent_config.initial_energy,
+                agent_config.initial_position,
+            );
+
+            // Définir le modèle Ollama (on pourrait l'ajouter dans la config)
+            agent.set_model("llama3.2:latest".to_string());
+
+            agents.insert(id, agent);
+        }
 
         Self {
             config,
             agents,
-            ui_tx,
-            running: false,
-            paused: false,
+            messages: Vec::new(),
             current_tick: 0,
+            running: false,
+            ui_tx,
+            sim_rx,
+            discussion_topic: None,
+            runtime,
         }
     }
 
-    pub fn run(&mut self, rx: Receiver<UIToSimulation>) {
-        // Envoyer un statut initial
-        let _ = self.ui_tx.send(SimulationToUI::Status("Simulation prête".to_string()));
+    pub fn run(&mut self) {
+        // Attendre le signal de démarrage
+        while let Ok(command) = self.sim_rx.recv() {
+            match command {
+                UIToSimulation::Start => {
+                    self.running = true;
+                    break;
+                }
+                UIToSimulation::SetDiscussionTopic(topic) => {
+                    self.discussion_topic = Some(topic.clone());
+                    // Envoyer un message de mise à jour à l'UI
+                    let _ = self.ui_tx.send(SimulationToUI::StateUpdate(
+                        format!("Sujet de discussion défini: {}", topic)
+                    ));
+                    // Démarrer la conversation immédiatement si le sujet est défini
+                    self.start_conversation(&topic);
+                }
+                _ => continue,
+            }
+        }
 
-        // Boucle principale
-        loop {
-            // Vérifier les messages de l'UI
-            if let Ok(message) = rx.try_recv() {
-                match message {
-                    UIToSimulation::Start => {
-                        self.running = true;
-                        self.paused = false;
-                        let _ = self.ui_tx.send(SimulationToUI::Status("Simulation démarrée".to_string()));
+        // Boucle principale de simulation
+        let mut last_tick_time = Instant::now();
+        let tick_duration = Duration::from_millis(1000 / 10); // 10 ticks par seconde
+
+        while self.running {
+            // Vérifier les commandes de l'UI
+            if let Ok(command) = self.sim_rx.try_recv() {
+                match command {
+                    UIToSimulation::Pause => self.running = false,
+                    UIToSimulation::Resume => self.running = true,
+                    UIToSimulation::Stop => break,
+                    UIToSimulation::SetDiscussionTopic(topic) => {
+                        self.discussion_topic = Some(topic.clone());
+                        self.start_conversation(&topic);
                     }
-                    UIToSimulation::Pause => {
-                        self.paused = true;
-                        let _ = self.ui_tx.send(SimulationToUI::Status("Simulation en pause".to_string()));
-                    }
-                    UIToSimulation::Resume => {
-                        self.paused = false;
-                        let _ = self.ui_tx.send(SimulationToUI::Status("Simulation reprise".to_string()));
-                    }
-                    UIToSimulation::Stop => {
-                        self.running = false;
-                        let _ = self.ui_tx.send(SimulationToUI::Status("Simulation arrêtée".to_string()));
-                        break;
-                    }
-                    UIToSimulation::SetConfig(config_str) => {
-                        // Traiter la configuration
-                        let _ = self.ui_tx.send(SimulationToUI::Status(format!("Configuration reçue: {}", config_str)));
-                    }
+                    _ => {}
                 }
             }
 
-            // Si la simulation est en cours et non en pause
-            if self.running && !self.paused {
-                // Incrémenter le tick
-                self.current_tick += 1;
+            // Si en pause, attendre
+            if !self.running {
+                thread::sleep(Duration::from_millis(100));
+                continue;
+            }
 
-                // Mettre à jour les agents
-                let mut all_messages = Vec::new();
+            // Vérifier si c'est le moment de faire un tick
+            let now = Instant::now();
+            if now.duration_since(last_tick_time) >= tick_duration {
+                self.tick();
+                last_tick_time = now;
+            } else {
+                // Attendre un peu pour ne pas surcharger le CPU
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
 
-                for agent in &mut self.agents {
-                    agent.update(self.current_tick);
+        // Envoyer un message final à l'UI
+        let _ = self.ui_tx.send(SimulationToUI::StateUpdate("Simulation arrêtée".to_string()));
+    }
 
-                    // Envoyer les mises à jour d'état
+    fn tick(&mut self) {
+        self.current_tick += 1;
+
+        // Envoyer une mise à jour du tick à l'UI
+        let _ = self.ui_tx.send(SimulationToUI::TickUpdate(self.current_tick));
+
+        // Traiter les messages en attente
+        let mut new_messages = Vec::new();
+
+        // Collecter les messages à traiter
+        let messages_to_process: Vec<(String, Message)> = self.messages.iter()
+            .filter(|msg| {
+                // Filtrer les messages qui n'ont pas encore été traités
+                let recipient = &msg.recipient;
+                self.agents.values().any(|agent| agent.name == *recipient)
+            })
+            .map(|msg| {
+                // Trouver l'ID de l'agent destinataire
+                let recipient_id = self.agents.iter()
+                    .find(|(_, agent)| agent.name == msg.recipient)
+                    .map(|(id, _)| id.clone())
+                    .unwrap_or_default();
+
+                (recipient_id, msg.clone())
+            })
+            .collect();
+
+        // Traiter chaque message
+        for (agent_id, message) in messages_to_process {
+            if let Some(agent) = self.agents.get_mut(&agent_id) {
+                if let Some(response) = agent.process_message(&message, &self.runtime) {
+                    new_messages.push(response);
+
+                    // Mettre à jour l'état de l'agent dans l'UI
                     let _ = self.ui_tx.send(SimulationToUI::AgentUpdate(
                         agent.name.clone(),
-                        format!("{:?}", agent.get_state()),
-                        agent.get_energy() as u32
+                        agent.state.clone(),
+                        agent.energy
                     ));
-
-                    // Collecter les messages
-                    all_messages.extend(agent.get_messages());
                 }
-
-                // Envoyer tous les messages à l'UI
-                if !all_messages.is_empty() {
-                    let _ = self.ui_tx.send(SimulationToUI::Messages(all_messages));
-                }
-
-                // Envoyer le tick actuel
-                let _ = self.ui_tx.send(SimulationToUI::Tick(self.current_tick));
-
-                // Attendre avant le prochain tick
-                thread::sleep(Duration::from_millis(1000 / self.config.world.ticks_per_hour as u64));
-            } else {
-                // Si en pause ou non démarré, attendre un peu avant de vérifier à nouveau
-                thread::sleep(Duration::from_millis(100));
             }
+        }
+
+        // Ajouter les nouveaux messages
+        for message in new_messages {
+            // Envoyer le message à l'UI
+            let _ = self.ui_tx.send(SimulationToUI::MessageUpdate(message.clone()));
+            self.messages.push(message);
+        }
+
+        // Mettre à jour l'énergie des agents
+        for (id, agent) in self.agents.iter_mut() {
+            // Régénération passive d'énergie
+            agent.energy += 0.1;
+            if agent.energy > 100.0 {
+                agent.energy = 100.0;
+            }
+
+            // Envoyer une mise à jour à l'UI
+            let _ = self.ui_tx.send(SimulationToUI::AgentUpdate(
+                agent.name.clone(),
+                agent.state.clone(),
+                agent.energy
+            ));
+        }
+    }
+
+    fn start_conversation(&mut self, topic: &str) {
+        // Choisir un agent pour commencer la conversation
+        if let Some((starter_id, starter)) = self.agents.iter().next() {
+            // Choisir un destinataire aléatoire différent de l'expéditeur
+            let recipient = self.agents.iter()
+                .find(|(id, _)| *id != starter_id)
+                .map(|(_, agent)| agent.name.clone())
+                .unwrap_or_else(|| "everyone".to_string());
+
+            // Créer un message initial
+            let initial_message = Message {
+                id: Uuid::new_v4().to_string(),
+                timestamp: Utc::now(),
+                sender: "Système".to_string(),
+                recipient: starter.name.clone(),
+                content: json!(format!("Parlons de {}. Qu'en penses-tu?", topic)),
+            };
+
+            // Ajouter le message à la liste
+            self.messages.push(initial_message.clone());
+
+            // Envoyer le message à l'UI
+            let _ = self.ui_tx.send(SimulationToUI::MessageUpdate(initial_message));
+            let _ = self.ui_tx.send(SimulationToUI::StateUpdate(
+                format!("Conversation démarrée sur le sujet: {}", topic)
+            ));
         }
     }
 }
