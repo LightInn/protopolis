@@ -1,218 +1,154 @@
-// ui.rs
-use std::io;
-use std::sync::mpsc::{Receiver, Sender};
-use std::time::{Duration, Instant};
-
-use crossterm::{
-    event::{self, Event, KeyCode},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    ExecutableCommand,
-};
-use ratatui::{
-    backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Tabs},
-    Terminal,
-};
-
+// ui.rs (correction)
 use crate::message::Message;
 use crate::simulation::{SimulationToUI, UIToSimulation};
+use crate::state::AgentState;
+use std::io::{self, Write};
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
+use std::time::Duration;
 
 pub struct UI {
-    sim_tx: Sender<UIToSimulation>,
-    sim_rx: Receiver<SimulationToUI>,
-    terminal: Terminal<CrosstermBackend<io::Stdout>>,
-    state: String,
-    current_tab: usize,
-    messages: Vec<Message>,
-    agent_states: Vec<(String, String, u32)>, // nom, état, énergie
-    current_tick: u64,
+    ui_tx: Sender<UIToSimulation>,
+    ui_rx: Receiver<SimulationToUI>,
 }
 
 impl UI {
-    pub fn new(
-        sim_tx: Sender<UIToSimulation>,
-        sim_rx: Receiver<SimulationToUI>,
-    ) -> Result<Self, io::Error> {
-        // Configurer le terminal
-        enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        stdout.execute(EnterAlternateScreen)?;
-        let backend = CrosstermBackend::new(stdout);
-        let terminal = Terminal::new(backend)?;
-
-        Ok(Self {
-            sim_tx,
-            sim_rx,
-            terminal,
-            state: "Initialisation".to_string(),
-            current_tab: 0,
-            messages: Vec::new(),
-            agent_states: Vec::new(),
-            current_tick: 0,
-        })
+    pub fn new(ui_tx: Sender<UIToSimulation>, ui_rx: Receiver<SimulationToUI>) -> Self {
+        Self { ui_tx, ui_rx }
     }
 
-    pub fn run(&mut self) -> io::Result<()> {
-        let mut last_draw = Instant::now();
+    pub fn run(&mut self) {
+        println!("=== Simulation d'Agents avec Communication Ollama ===");
+        println!("Commandes disponibles:");
+        println!("  start - Démarrer la simulation");
+        println!("  pause - Mettre en pause la simulation");
+        println!("  resume - Reprendre la simulation");
+        println!("  stop - Arrêter la simulation");
+        println!("  topic <sujet> - Définir un sujet de discussion");
+        println!("  exit - Quitter l'application");
 
-        // Envoyer le signal de démarrage à la simulation
-        let _ = self.sim_tx.send(UIToSimulation::Start);
+        // Créer un thread séparé pour gérer les mises à jour de la simulation
+        let tx = self.ui_tx.clone();
+        let mut ui_rx = std::sync::mpsc::channel().1;
+        std::mem::swap(&mut self.ui_rx, &mut ui_rx);
 
-        loop {
-            // Vérifier les messages de la simulation
-            while let Ok(message) = self.sim_rx.try_recv() {
-                match message {
-                    SimulationToUI::Status(status) => {
-                        self.state = status;
+        thread::spawn(move || {
+            while let Ok(update) = ui_rx.recv() {
+                match update {
+                    SimulationToUI::TickUpdate(tick) => {
+                        if tick % 10 == 0 {
+                            println!("Tick: {}", tick);
+                        }
                     }
                     SimulationToUI::AgentUpdate(name, state, energy) => {
-                        // Mettre à jour ou ajouter l'état de l'agent
-                        if let Some(agent) = self.agent_states.iter_mut().find(|(n, _, _)| n == &name) {
-                            *agent = (name, state, energy);
-                        } else {
-                            self.agent_states.push((name, state, energy));
-                        }
+                        println!("Agent {} est maintenant {:?} (énergie: {:.1})", name, state, energy);
                     }
-                    SimulationToUI::Messages(messages) => {
-                        // Ajouter les nouveaux messages
-                        self.messages.extend(messages);
+                    SimulationToUI::MessageUpdate(message) => {
+                        println!("\n[MESSAGE] De {} à {}: {}",
+                                 message.sender,
+                                 message.recipient,
+                                 message.content.to_string().trim_matches('"')
+                        );
                     }
-                    SimulationToUI::Tick(tick) => {
-                        self.current_tick = tick;
+                    SimulationToUI::StateUpdate(state) => {
+                        println!("[SYSTÈME] {}", state);
                     }
                 }
+                io::stdout().flush().unwrap();
             }
+        });
 
-            // Dessiner l'interface toutes les 100ms
-            if last_draw.elapsed() >= Duration::from_millis(100) {
-                self.draw()?;
-                last_draw = Instant::now();
-            }
+        // Boucle principale pour les entrées utilisateur
+        loop {
+            print!("> ");
+            io::stdout().flush().unwrap();
 
-            // Traiter les événements clavier
-            if event::poll(Duration::from_millis(10))? {
-                if let Event::Key(key) = event::read()? {
-                    if key.code == KeyCode::Char('q') {
-                        // Envoyer un signal d'arrêt à la simulation
-                        let _ = self.sim_tx.send(UIToSimulation::Stop);
-                        break;
-                    } else if key.code == KeyCode::Char('p') {
-                        // Mettre en pause ou reprendre la simulation
-                        if self.state == "Running" {
-                            let _ = self.sim_tx.send(UIToSimulation::Pause);
-                        } else if self.state == "Paused" {
-                            let _ = self.sim_tx.send(UIToSimulation::Resume);
+            let mut input = String::new();
+            match io::stdin().read_line(&mut input) {
+                Ok(_) => {
+                    let input = input.trim();
+
+                    match input {
+                        "start" => {
+                            let _ = self.ui_tx.send(UIToSimulation::Start);
+                            println!("Démarrage de la simulation...");
                         }
-                    } else if key.code == KeyCode::Tab {
-                        // Changer d'onglet
-                        self.current_tab = (self.current_tab + 1) % 3;
-                    } else if key.code == KeyCode::BackTab {
-                        // Onglet précédent
-                        self.current_tab = (self.current_tab + 2) % 3;
+                        "pause" => {
+                            let _ = self.ui_tx.send(UIToSimulation::Pause);
+                            println!("Mise en pause de la simulation...");
+                        }
+                        "resume" => {
+                            let _ = self.ui_tx.send(UIToSimulation::Resume);
+                            println!("Reprise de la simulation...");
+                        }
+                        "stop" => {
+                            let _ = self.ui_tx.send(UIToSimulation::Stop);
+                            println!("Arrêt de la simulation...");
+                        }
+                        "exit" => {
+                            let _ = self.ui_tx.send(UIToSimulation::Stop);
+                            println!("Fermeture de l'application...");
+                            break;
+                        }
+                        _ if input.starts_with("topic ") => {
+                            let topic = input.trim_start_matches("topic ").to_string();
+                            let _ = self.ui_tx.send(UIToSimulation::SetDiscussionTopic(topic.clone()));
+                            println!("Sujet de discussion défini: {}", topic);
+                        }
+                        _ => {
+                            println!("Commande non reconnue. Essayez 'start', 'pause', 'resume', 'stop', 'topic <sujet>' ou 'exit'.");
+                        }
                     }
+                }
+                Err(e) => {
+                    eprintln!("Erreur de lecture: {}", e);
+                    break;
                 }
             }
         }
-
-        // Restaurer le terminal
-        disable_raw_mode()?;
-        self.terminal.backend_mut().execute(LeaveAlternateScreen)?;
-
-        Ok(())
-    }
-
-    fn draw(&mut self) -> io::Result<()> {
-        self.terminal.draw(|f| {
-            // Créer la mise en page principale
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .margin(1)
-                .constraints([
-                    Constraint::Length(3),  // Barre d'état
-                    Constraint::Length(3),  // Onglets
-                    Constraint::Min(0),     // Contenu principal
-                ])
-                .split(f.size());
-
-            // Barre d'état
-            let status = Paragraph::new(format!(
-                "État: {} | Tick: {} | Appuyez sur 'q' pour quitter, 'p' pour pause/reprise, Tab pour changer d'onglet",
-                self.state, self.current_tick
-            ))
-                .block(Block::default().borders(Borders::ALL).title("Simulation"));
-            f.render_widget(status, chunks[0]);
-
-            // Onglets
-            let titles = vec!["Agents", "Messages", "Configuration"];
-            let tabs = Tabs::new(titles.iter().map(|t| t.to_string()).collect::<Vec<_>>())
-                .block(Block::default().borders(Borders::ALL))
-                .select(self.current_tab)
-                .style(Style::default())
-                .highlight_style(Style::default().add_modifier(Modifier::BOLD));
-            f.render_widget(tabs, chunks[1]);
-
-            // Contenu principal selon l'onglet sélectionné
-            match self.current_tab {
-                0 => {
-                    // Onglet Agents
-                    let agent_items: Vec<ListItem> = self.agent_states
-                        .iter()
-                        .map(|(name, state, energy)| {
-                            ListItem::new(format!("{}: État={}, Énergie={}", name, state, energy))
-                        })
-                        .collect();
-
-                    let agents_list = List::new(agent_items)
-                        .block(Block::default().borders(Borders::ALL).title("Agents"))
-                        .style(Style::default())
-                        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
-
-                    f.render_widget(agents_list, chunks[2]);
-                }
-                1 => {
-                    // Onglet Messages
-                    let message_items: Vec<ListItem> = self.messages
-                        .iter()
-                        .rev()
-                        .take(50)  // Limiter à 50 messages pour éviter de surcharger l'affichage
-                        .map(|msg| {
-                            let content = match &msg.content {
-                                serde_json::Value::String(s) => s.clone(),
-                                _ => format!("{:?}", msg.content),
-                            };
-                            ListItem::new(format!(
-                                "[{}] {} -> {}: {}",
-                                msg.timestamp.format("%H:%M:%S"),
-                                msg.sender,
-                                msg.recipient,
-                                content
-                            ))
-                        })
-                        .collect();
-
-                    let messages_list = List::new(message_items)
-                        .block(Block::default().borders(Borders::ALL).title("Messages"))
-                        .style(Style::default());
-
-                    f.render_widget(messages_list, chunks[2]);
-                }
-                2 => {
-                    // Onglet Configuration
-                    let config_text = Paragraph::new(
-                        "Configuration de la simulation\n\
-                        (Cette section permettrait de modifier les paramètres en temps réel)"
-                    )
-                        .block(Block::default().borders(Borders::ALL).title("Configuration"));
-
-                    f.render_widget(config_text, chunks[2]);
-                }
-                _ => {}
-            }
-        })?;
-
-        Ok(())
     }
 }
 
+// Extension pour vérifier si des données sont disponibles sur stdin
+trait DataReady {
+    fn data_ready(&self) -> io::Result<bool>;
+}
+
+impl DataReady for io::Stdin {
+    #[cfg(unix)]
+    fn data_ready(&self) -> io::Result<bool> {
+        use std::os::unix::io::AsRawFd;
+        use std::io::Error;
+        use libc::{fd_set, select, timeval, FD_ISSET, FD_SET, FD_ZERO};
+
+        let fd = io::stdin().as_raw_fd();
+        let mut read_fds = unsafe { std::mem::zeroed::<fd_set>() };
+        unsafe { FD_ZERO(&mut read_fds); }
+        unsafe { FD_SET(fd, &mut read_fds); }
+
+        let mut timeout = timeval {
+            tv_sec: 0,
+            tv_usec: 0,
+        };
+
+        let result = unsafe { select(fd + 1, &mut read_fds, std::ptr::null_mut(), std::ptr::null_mut(), &mut timeout) };
+
+        if result < 0 {
+            Err(Error::last_os_error())
+        } else {
+            Ok(unsafe { FD_ISSET(fd, &read_fds) })
+        }
+    }
+
+    #[cfg(windows)]
+    fn data_ready(&self) -> io::Result<bool> {
+        // Sur Windows, on ne peut pas facilement vérifier si stdin est prêt
+        // On retourne simplement false pour que le programme continue
+        Ok(false)
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    fn data_ready(&self) -> io::Result<bool> {
+        Ok(false)
+    }
+}
