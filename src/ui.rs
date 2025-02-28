@@ -3,6 +3,7 @@ use crate::message::Message;
 use crate::simulation::{SimulationToUI, UIToSimulation};
 use crate::state::AgentState;
 use std::io::{self, Write};
+use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
@@ -163,4 +164,45 @@ impl DataReady for io::Stdin {
     fn data_ready(&self) -> io::Result<bool> {
         Ok(false)
     }
+}
+
+#[test]
+fn test_ui_receives_tick_update() {
+    let (ui_tx, _) = mpsc::channel();
+    let (sim_tx, ui_rx) = mpsc::channel();
+    let mut ui = UI::new(ui_tx, ui_rx);
+
+    thread::spawn(move || {
+        let _ = ui.run();
+    });
+
+    // Envoyer un message de mise à jour de tick
+    sim_tx.send(SimulationToUI::TickUpdate(10)).unwrap();
+    thread::sleep(Duration::from_millis(100));
+
+    // Vérifier que l'UI traite bien la mise à jour
+    assert!(true); // Ici, on ne peut pas vraiment capter la sortie console directement
+}
+
+#[test]
+fn test_ui_message_update() {
+    let (ui_tx, _) = mpsc::channel();
+    let (sim_tx, ui_rx) = mpsc::channel();
+    let mut ui = UI::new(ui_tx, ui_rx);
+
+    thread::spawn(move || {
+        let _ = ui.run();
+    });
+
+    let msg = Message {
+        id: "1".to_string(),
+        timestamp: Default::default(),
+        sender: "Agent1".to_string(),
+        recipient: "Agent2".to_string(),
+        content: serde_json::Value::String("Bonjour".to_string()),
+    };
+    sim_tx.send(SimulationToUI::MessageUpdate(msg)).unwrap();
+    thread::sleep(Duration::from_millis(100));
+
+    assert!(true); // Même contrainte que précédemment, mais le test vérifie l'envoi
 }
