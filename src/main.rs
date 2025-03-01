@@ -25,7 +25,7 @@ fn main() {
         Err(e) => {
             eprintln!("Error loading configuration: {}", e);
             let config = config::Config::default();
-            config.save(Path::new("config.json"));
+            let _ = config.save(Path::new("config.json"));
             config
         }
     };
