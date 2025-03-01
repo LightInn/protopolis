@@ -20,6 +20,8 @@ pub struct Agent {
     pub memory: Vec<String>,
     pub conversation_history: Vec<String>,
     pub ollama_model: String,
+    // Nouveau: stocke les messages entendus pendant ce tick
+    pub next_prompt: String,
 }
 
 impl Agent {
@@ -39,7 +41,8 @@ impl Agent {
             personality,
             memory: Vec::new(),
             conversation_history: Vec::new(),
-            ollama_model: "llama2".to_string(), // Modèle par défaut
+            ollama_model: "llama3.2:latest".to_string(), // Modèle par défaut
+            next_prompt: String::new(),
         }
     }
 
@@ -47,6 +50,10 @@ impl Agent {
         self.ollama_model = model;
     }
 
+    
+    
+    
+    
     pub fn process_message(&mut self, message: &Message, runtime: &Runtime) -> Option<Message> {
         // Mettre à jour l'état
         self.state = AgentState::Thinking;
@@ -131,6 +138,46 @@ impl Agent {
                 Ok(response.response)   
             },
             Err(e) => Err(format!("Erreur lors de la génération: {}", e))
+        }
+    }
+
+
+    pub(crate) async fn generate_response_from_prompt(&self) -> Result<String, String> {
+        let ollama = Ollama::default();
+
+        // Construire le prompt avec la personnalité
+        let personality_desc = format!(
+            "Tu es {}, un agent avec les traits de personnalité suivants:\n\
+            - Ouverture d'esprit: {}/10\n\
+            - Conscienciosité: {}/10\n\
+            - Extraversion: {}/10\n\
+            - Agréabilité: {}/10\n\
+            - Névrosisme: {}/10\n\
+            Réponds de manière concise (max 2-3 phrases) en respectant ta personnalité.",
+            self.name,
+            (self.personality.openness * 10.0) as i32,
+            (self.personality.conscientiousness * 10.0) as i32,
+            (self.personality.extraversion * 10.0) as i32,
+            (self.personality.agreeableness * 10.0) as i32,
+            (self.personality.neuroticism * 10.0) as i32
+        );
+
+        // Historique de conversation
+        let history = self.conversation_history.join("\n");
+
+        // Prompt final avec les messages récents entendus
+        let prompt = format!(
+            "{}\n\nHistorique de conversation:\n{}\n\nMessages récents:\n{}\n\nQue veux-tu répondre?",
+            personality_desc,
+            history,
+            self.next_prompt
+        );
+
+        // Envoyer la requête
+        let request = GenerationRequest::new(self.ollama_model.clone(), prompt);
+        match ollama.generate(request).await {
+            Ok(response) => Ok(response.response),
+            Err(e) => Err(format!("Erreur de génération: {}", e))
         }
     }
 }
