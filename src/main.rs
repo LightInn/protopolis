@@ -31,8 +31,8 @@ fn main() {
     };
 
     // Create communication channels
-    let (ui_tx, sim_rx) = mpsc::channel(); // Channel for UI -> Simulation messages
-    let (sim_tx, ui_rx) = mpsc::channel(); // Channel for Simulation -> UI messages
+    let (ui_tx, sim_rx) = mpsc::channel();
+    let (sim_tx, ui_rx) = mpsc::channel();
 
     // Spawn the simulation thread
     let simulation_thread = thread::spawn(move || {
@@ -42,7 +42,9 @@ fn main() {
 
     // Initialize and start the user interface
     let mut ui = UI::new(ui_tx, ui_rx);
-    ui.run();
+    if let Err(err) = ui.run() {
+        eprintln!("Error running UI: {}", err);
+    }
 
     // Wait for the simulation thread to finish
     if let Err(e) = simulation_thread.join() {
