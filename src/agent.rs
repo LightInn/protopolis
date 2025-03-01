@@ -1,4 +1,5 @@
 // agent.rs
+
 use crate::message::Message;
 use crate::personality::Personality;
 use crate::state::AgentState;
@@ -8,22 +9,52 @@ use ollama_rs::generation::completion::request::GenerationRequest;
 use serde_json::json;
 use tokio::runtime::Runtime;
 
+/// Represents an autonomous agent in the simulation.
 #[derive(Debug, Clone)]
 pub struct Agent {
+    /// Unique identifier for the agent.
     pub id: String,
+
+    /// Agent's display name.
     pub name: String,
+
+    /// Current state of the agent (Idle, Thinking, Speaking, etc.).
     pub state: AgentState,
+
+    /// Current energy level of the agent.
     pub energy: f32,
+
+    /// Position of the agent in the world (x, y coordinates).
     pub position: (i32, i32),
+
+    /// Agent's personality traits influencing its behavior.
     pub personality: Personality,
+
+    /// Memory storage for important past events.
     pub memory: Vec<String>,
+
+    /// Conversation history (last 10 messages).
     pub conversation_history: Vec<String>,
+
+    /// Name of the AI model used for generating responses.
     pub ollama_model: String,
-    // Nouveau: stocke les messages entendus pendant ce tick
+
+    /// Stores messages heard during the current tick.
     pub next_prompt: String,
 }
 
 impl Agent {
+    /// Creates a new agent with the given parameters.
+    ///
+    /// # Arguments
+    /// * `id` - Unique agent ID.
+    /// * `name` - Agent's name.
+    /// * `personality` - Personality traits of the agent.
+    /// * `initial_energy` - Starting energy level.
+    /// * `initial_position` - Initial (x, y) coordinates.
+    ///
+    /// # Returns
+    /// * A new `Agent` instance.
     pub fn new(
         id: String,
         name: String,
@@ -35,47 +66,57 @@ impl Agent {
             id,
             name,
             state: AgentState::Idle,
-            energy: 0.0,
+            energy: initial_energy,
             position: initial_position,
             personality,
             memory: Vec::new(),
             conversation_history: Vec::new(),
-            ollama_model: "llama3.2:latest".to_string(), // Modèle par défaut
+            ollama_model: "llama3.2:latest".to_string(), // Default model
             next_prompt: String::new(),
         }
     }
 
+    /// Sets the AI model used for generating responses.
     pub fn set_model(&mut self, model: String) {
         self.ollama_model = model;
     }
 
-    
-    
-    
-    
+    /// Processes an incoming message and generates a response.
+    ///
+    /// # Arguments
+    /// * `message` - The incoming message.
+    /// * `runtime` - The Tokio runtime for async execution.
+    ///
+    /// # Returns
+    /// * An optional `Message` containing the agent's response.
+    ///
+    /// # Behavior:
+    /// - Updates the agent's state to `Thinking`.
+    /// - Adds the message to the conversation history.
+    /// - Uses an AI model (Ollama) to generate a response.
+    /// - Consumes energy when speaking.
     pub fn process_message(&mut self, message: &Message, runtime: &Runtime) -> Option<Message> {
-        // Mettre à jour l'état
         self.state = AgentState::Thinking;
 
-        // Ajouter le message à l'historique de conversation
+        // Append the message to conversation history
         let msg_entry = format!("{}: {}", message.sender, message.content);
         self.conversation_history.push(msg_entry);
 
-        // Limiter l'historique à 10 messages pour éviter des prompts trop longs
+        // Limit conversation history to 10 messages to keep prompts short
         if self.conversation_history.len() > 10 {
             self.conversation_history.remove(0);
         }
 
-        // Générer une réponse avec Ollama
+        // Generate a response using Ollama
         let response = runtime.block_on(async {
             self.generate_response(&message.content.to_string()).await
         });
 
         if let Ok(response_text) = response {
-            // Ajouter notre réponse à l'historique
+            // Add response to conversation history
             self.conversation_history.push(format!("{}: {}", self.name, response_text));
 
-            // Créer un nouveau message
+            // Create a new message
             let response_message = Message {
                 id: uuid::Uuid::new_v4().to_string(),
                 timestamp: Utc::now(),
@@ -84,30 +125,42 @@ impl Agent {
                 content: json!(response_text),
             };
 
-            // Mettre à jour l'état
+            // Update agent state and reduce energy
             self.state = AgentState::Speaking;
-            self.energy -= 1.0; // Parler consomme de l'énergie
+            self.energy -= 1.0;
 
             Some(response_message)
         } else {
-            // En cas d'erreur, on passe à l'état Idle
+            // If response generation fails, return to Idle state
             self.state = AgentState::Idle;
             None
         }
     }
 
+    /// Generates a response based on the given input message.
+    ///
+    /// # Arguments
+    /// * `input` - The message to respond to.
+    ///
+    /// # Returns
+    /// * `Ok(String)` containing the response text.
+    /// * `Err(String)` if the response could not be generated.
+    ///
+    /// # TODO:
+    /// - Improve the response generation logic by integrating more personality-driven choices.
+    /// - Consider using a weighted system where personality traits influence responses.
     async fn generate_response(&self, input: &str) -> Result<String, String> {
         let ollama = Ollama::default();
 
-        // Construire le prompt avec la personnalité et l'historique de conversation
+        // Construct personality description
         let personality_desc = format!(
-            "Tu es {}, un agent avec les traits de personnalité suivants:\n\
-            - Ouverture d'esprit: {}/10\n\
-            - Conscienciosité: {}/10\n\
+            "You are {}, an AI agent with the following personality traits:\n\
+            - Openness: {}/10\n\
+            - Conscientiousness: {}/10\n\
             - Extraversion: {}/10\n\
-            - Agréabilité: {}/10\n\
-            - Névrosisme: {}/10\n\
-            Réponds de manière concise (max 2-3 phrases) en respectant ta personnalité.",
+            - Agreeableness: {}/10\n\
+            - Neuroticism: {}/10\n\
+            Respond concisely (max 2-3 sentences) while staying in character.",
             self.name,
             (self.personality.openness * 10.0) as i32,
             (self.personality.conscientiousness * 10.0) as i32,
@@ -116,43 +169,46 @@ impl Agent {
             (self.personality.neuroticism * 10.0) as i32
         );
 
-        // Construire l'historique de conversation
+        // Build conversation history
         let history = self.conversation_history.join("\n");
 
-        // Prompt final
+        // Final prompt
         let prompt = format!(
-            "{}\n\nHistorique de conversation:\n{}\n\nRéponds à: {}",
+            "{}\n\nConversation history:\n{}\n\nRespond to: {}",
             personality_desc,
             history,
             input
         );
 
-        // Créer la requête
+        // Send request to the AI model
         let request = GenerationRequest::new(self.ollama_model.clone(), prompt);
-
-        // Envoyer la requête
         match ollama.generate(request).await {
-            Ok(response) => {
-                println!("{}", response.response);
-                Ok(response.response)   
-            },
-            Err(e) => Err(format!("Erreur lors de la génération: {}", e))
+            Ok(response) => Ok(response.response),
+            Err(e) => Err(format!("Generation error: {}", e)),
         }
     }
 
-
+    /// Generates a response based on the agent's stored prompt.
+    ///
+    /// # Returns
+    /// * `Ok(String)` containing the response text.
+    /// * `Err(String)` if the response could not be generated.
+    ///
+    /// # TODO:
+    /// - Improve contextual awareness by prioritizing recent inputs.
+    /// - Introduce energy-based behavior (e.g., tired agents respond differently).
     pub(crate) async fn generate_response_from_prompt(&self) -> Result<String, String> {
         let ollama = Ollama::default();
 
-        // Construire le prompt avec la personnalité
+        // Construct personality description
         let personality_desc = format!(
-            "Tu es {}, un agent avec les traits de personnalité suivants:\n\
-            - Ouverture d'esprit: {}/10\n\
-            - Conscienciosité: {}/10\n\
+            "You are {}, an AI agent with the following personality traits:\n\
+            - Openness: {}/10\n\
+            - Conscientiousness: {}/10\n\
             - Extraversion: {}/10\n\
-            - Agréabilité: {}/10\n\
-            - Névrosisme: {}/10\n\
-            Réponds de manière concise (max 2-3 phrases) en respectant ta personnalité.",
+            - Agreeableness: {}/10\n\
+            - Neuroticism: {}/10\n\
+            Respond concisely (max 2-3 sentences) while staying in character.",
             self.name,
             (self.personality.openness * 10.0) as i32,
             (self.personality.conscientiousness * 10.0) as i32,
@@ -161,23 +217,22 @@ impl Agent {
             (self.personality.neuroticism * 10.0) as i32
         );
 
-        // Historique de conversation
+        // Conversation history
         let history = self.conversation_history.join("\n");
 
-        // Prompt final avec les messages récents entendus
+        // Final prompt including recent messages
         let prompt = format!(
-            "{}\n\nHistorique de conversation:\n{}\n\nMessages récents:\n{}\n\nQue veux-tu répondre?",
+            "{}\n\nConversation history:\n{}\n\nRecent messages:\n{}\n\nHow would you respond?",
             personality_desc,
             history,
             self.next_prompt
         );
 
-        // Envoyer la requête
+        // Send request to the AI model
         let request = GenerationRequest::new(self.ollama_model.clone(), prompt);
         match ollama.generate(request).await {
             Ok(response) => Ok(response.response),
-            Err(e) => Err(format!("Erreur de génération: {}", e))
+            Err(e) => Err(format!("Generation error: {}", e)),
         }
     }
 }
-

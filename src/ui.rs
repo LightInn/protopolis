@@ -12,6 +12,7 @@ const COLORS: [&str; 8] = [
     "red", "green", "yellow", "blue", "magenta", "cyan", "bright_red", "bright_green"
 ];
 
+/// UI struct holds communication channels and agent colors for the simulation.
 pub struct UI {
     ui_tx: Sender<UIToSimulation>,
     ui_rx: Receiver<SimulationToUI>,
@@ -19,6 +20,7 @@ pub struct UI {
 }
 
 impl UI {
+    /// Creates a new UI instance with communication channels and an empty agent color map.
     pub fn new(ui_tx: Sender<UIToSimulation>, ui_rx: Receiver<SimulationToUI>) -> Self {
         Self {
             ui_tx,
@@ -27,16 +29,19 @@ impl UI {
         }
     }
 
+    // Clears the terminal screen.
     fn clear_screen() {
         print!("\x1B[2J\x1B[1;1H");
         io::stdout().flush().unwrap();
     }
 
+    // Moves the cursor to the bottom of the terminal window.
     fn move_cursor_to_bottom(height: u16) {
         print!("\x1B[{};0H", height);
         io::stdout().flush().unwrap();
     }
 
+    // Returns the terminal height, defaulting to 24 rows if it can't be determined.
     fn get_terminal_height() -> u16 {
         #[cfg(unix)]
         {
@@ -55,10 +60,11 @@ impl UI {
             }
         }
 
-        // Valeur par défaut si on ne peut pas déterminer la taille
+        // Default value if terminal size can't be determined
         24
     }
 
+    // Returns the color associated with an agent's name.
     fn get_agent_color(&mut self, agent_name: &str) -> ColoredString {
         if !self.agent_colors.contains_key(agent_name) {
             let color_index = self.agent_colors.len() % COLORS.len();
@@ -78,27 +84,29 @@ impl UI {
         }
     }
 
+    // Prints a message with proper formatting, including sender and recipient colors.
     fn print_message(&mut self, message: &Message) {
         let sender_colored = match message.sender.as_str() {
-            "Utilisateur" => "Utilisateur".bright_white().bold(),
-            "Système" => "Système".bright_white().on_blue(),
+            "User" => "User".bright_white().bold(),
+            "System" => "System".bright_white().on_blue(),
             _ => self.get_agent_color(&message.sender)
         };
 
         let recipient_colored = match message.recipient.as_str() {
-            "Utilisateur" => "Utilisateur".bright_white().bold(),
-            "Système" => "Système".bright_white().on_blue(),
-            "everyone" => "tout le monde".italic(),
+            "User" => "User".bright_white().bold(),
+            "System" => "System".bright_white().on_blue(),
+            "everyone" => "everyone".italic(),
             _ => self.get_agent_color(&message.recipient)
         };
 
-        println!("\n[MESSAGE] De {} à {}: {}",
+        println!("\n[MESSAGE] From {} to {}: {}",
                  sender_colored,
                  recipient_colored,
                  message.content.to_string().trim_matches('"')
         );
     }
 
+    // Main function to run the UI, displaying instructions and handling user input.
     pub fn run(&mut self) {
         Self::clear_screen();
 
@@ -110,18 +118,18 @@ impl UI {
         println!("{}", "██║     ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║     ╚██████╔╝███████╗██║███████║".bright_cyan());
         println!("{}", "╚═╝     ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝      ╚═════╝ ╚══════╝╚═╝╚══════╝".bright_cyan());
         println!("\n\n");
-        println!("=== Simulation d'Agents avec Communication Ollama ===");
-        println!("Commandes disponibles:");
-        println!("  start - Démarrer la simulation");
-        println!("  pause - Mettre en pause la simulation");
-        println!("  resume - Reprendre la simulation");
-        println!("  stop - Arrêter la simulation");
-        println!("  topic <sujet> - Définir un sujet de discussion");
-        println!("  {} <agent> <message> - Envoyer un message à un agent", "msg".green());
-        println!("  exit - Quitter l'application");
+        println!("=== Agent Simulation with Ollama Communication ===");
+        println!("Available commands:");
+        println!("  start - Start the simulation");
+        println!("  pause - Pause the simulation");
+        println!("  resume - Resume the simulation");
+        println!("  stop - Stop the simulation");
+        println!("  topic <subject> - Set a discussion topic");
+        println!("  {} <agent> <message> - Send a message to an agent", "msg".green());
+        println!("  exit - Exit the application");
         println!("\n");
 
-        // Créer un thread séparé pour gérer les mises à jour de la simulation
+        // Create a separate thread to handle simulation updates
         let tx = self.ui_tx.clone();
         let mut ui_rx = std::sync::mpsc::channel().1;
         std::mem::swap(&mut self.ui_rx, &mut ui_rx);
@@ -129,11 +137,12 @@ impl UI {
 
         let terminal_height = Self::get_terminal_height();
 
+        // Thread for simulation updates
         thread::spawn(move || {
             let mut local_agent_colors = agent_colors_clone;
 
             while let Ok(update) = ui_rx.recv() {
-                // Effacer la ligne du prompt
+                // Clear the prompt line
                 print!("\r\x1B[K");
 
                 match update {
@@ -143,7 +152,7 @@ impl UI {
                         }
                     }
                     SimulationToUI::AgentUpdate(name, state, energy) => {
-                        // Déterminer la couleur de l'agent
+                        // Set agent color based on name
                         let color_index = local_agent_colors.len() % COLORS.len();
                         if !local_agent_colors.contains_key(&name) {
                             local_agent_colors.insert(name.clone(), COLORS[color_index].to_string());
@@ -176,14 +185,14 @@ impl UI {
                             energy.to_string().green()
                         };
 
-                        println!("Agent {} est maintenant {} (énergie: {})",
+                        println!("Agent {} is now {} (energy: {})",
                                  agent_name, state_str, energy_color);
                     }
                     SimulationToUI::MessageUpdate(message) => {
-                        // Déterminer les couleurs
+                        // Message colors
                         let sender_color = match message.sender.as_str() {
-                            "Utilisateur" => "Utilisateur".bright_white().bold(),
-                            "Système" => "Système".bright_white().on_blue(),
+                            "User" => "User".bright_white().bold(),
+                            "System" => "System".bright_white().on_blue(),
                             _ => {
                                 let color_index = local_agent_colors.len() % COLORS.len();
                                 if !local_agent_colors.contains_key(&message.sender) {
@@ -205,9 +214,9 @@ impl UI {
                         };
 
                         let recipient_color = match message.recipient.as_str() {
-                            "Utilisateur" => "Utilisateur".bright_white().bold(),
-                            "Système" => "Système".bright_white().on_blue(),
-                            "everyone" => "tout le monde".italic(),
+                            "User" => "User".bright_white().bold(),
+                            "System" => "System".bright_white().on_blue(),
+                            "everyone" => "everyone".italic(),
                             _ => {
                                 let color_index = local_agent_colors.len() % COLORS.len();
                                 if !local_agent_colors.contains_key(&message.recipient) {
@@ -228,24 +237,24 @@ impl UI {
                             }
                         };
 
-                        println!("\n[MESSAGE] De {} à {}: {}",
+                        println!("\n[MESSAGE] From {} to {}: {}",
                                  sender_color,
                                  recipient_color,
                                  message.content.to_string().trim_matches('"')
                         );
                     }
                     SimulationToUI::StateUpdate(state) => {
-                        println!("[{}] {}", "SYSTÈME".bright_blue(), state);
+                        println!("[{}] {}", "SYSTEM".bright_blue(), state);
                     }
                 }
 
-                // Réécrire le prompt
+                // Rewrite the prompt
                 print!("> ");
                 io::stdout().flush().unwrap();
             }
         });
 
-        // Boucle principale pour les entrées utilisateur
+        // Main loop for user inputs
         loop {
             print!("> ");
             io::stdout().flush().unwrap();
@@ -258,31 +267,31 @@ impl UI {
                     match input {
                         "start" => {
                             let _ = self.ui_tx.send(UIToSimulation::Start);
-                            println!("Démarrage de la simulation...");
+                            println!("Starting the simulation...");
                         }
                         "pause" => {
                             let _ = self.ui_tx.send(UIToSimulation::Pause);
-                            println!("Mise en pause de la simulation...");
+                            println!("Pausing the simulation...");
                         }
                         "resume" => {
                             let _ = self.ui_tx.send(UIToSimulation::Resume);
-                            println!("Reprise de la simulation...");
+                            println!("Resuming the simulation...");
                         }
                         "stop" => {
                             let _ = self.ui_tx.send(UIToSimulation::Stop);
-                            println!("Arrêt de la simulation...");
+                            println!("Stopping the simulation...");
                         }
                         "exit" => {
                             let _ = self.ui_tx.send(UIToSimulation::Stop);
-                            println!("Fermeture de l'application...");
+                            println!("Closing the application...");
                             break;
                         }
                         _ if input.starts_with("topic ") => {
                             let topic = input.trim_start_matches("topic ").to_string();
                             let _ = self.ui_tx.send(UIToSimulation::SetDiscussionTopic(topic.clone()));
-                            println!("Sujet de discussion défini: {}", topic.green());
+                            println!("Discussion topic set: {}", topic.green());
                         }
-                        // Nouvelle commande pour envoyer un message à un agent
+                        // New command to send a message to an agent
                         _ if input.starts_with("msg ") => {
                             let parts: Vec<&str> = input.splitn(3, ' ').collect();
                             if parts.len() == 3 {
@@ -292,20 +301,20 @@ impl UI {
                                     agent_name.to_string(),
                                     message.to_string()
                                 ));
-                                println!("Message envoyé à {}: {}",
+                                println!("Message sent to {}: {}",
                                          self.get_agent_color(agent_name),
                                          message.bright_white());
                             } else {
-                                println!("{}", "Format incorrect. Utilisez: msg <agent> <message>".red());
+                                println!("{}", "Incorrect format. Use: msg <agent> <message>".red());
                             }
                         }
                         _ => {
-                            println!("{}", "Commande non reconnue. Essayez 'start', 'pause', 'resume', 'stop', 'topic <sujet>', 'msg <agent> <message>' ou 'exit'.".red());
+                            println!("{}", "Unrecognized command. Try 'start', 'pause', 'resume', 'stop', 'topic <subject>', 'msg <agent> <message>' or 'exit'.".red());
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("{}", format!("Erreur de lecture: {}", e).red());
+                    eprintln!("{}", format!("Read error: {}", e).red());
                     break;
                 }
             }
@@ -314,8 +323,7 @@ impl UI {
 }
 
 
-
-// Extension pour vérifier si des données sont disponibles sur stdin
+/// Extension trait to check if there is data available on stdin.
 trait DataReady {
     fn data_ready(&self) -> io::Result<bool>;
 }
@@ -348,8 +356,8 @@ impl DataReady for io::Stdin {
 
     #[cfg(windows)]
     fn data_ready(&self) -> io::Result<bool> {
-        // Sur Windows, on ne peut pas facilement vérifier si stdin est prêt
-        // On retourne simplement false pour que le programme continue
+        // On Windows, we cannot easily check if stdin is ready
+        // Just return false to let the program continue
         Ok(false)
     }
 

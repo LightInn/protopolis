@@ -14,22 +14,25 @@ use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
+/// Enum representing commands from the UI to the simulation
 pub enum UIToSimulation {
-    Start,
-    Pause,
-    Resume,
-    Stop,
-    SetDiscussionTopic(String),
-    UserMessage(String, String),
+    Start,                          // Start the simulation
+    Pause,                          // Pause the simulation
+    Resume,                         // Resume the simulation
+    Stop,                           // Stop the simulation
+    SetDiscussionTopic(String),     // Set the discussion topic
+    UserMessage(String, String),    // User sends a message to a specific agent
 }
 
+/// Enum representing updates from the simulation to the UI
 pub enum SimulationToUI {
-    TickUpdate(u64),
-    AgentUpdate(String, AgentState, f32),
-    MessageUpdate(Message),
-    StateUpdate(String),
+    TickUpdate(u64),                // Update with the current tick
+    AgentUpdate(String, AgentState, f32),  // Update agent's status and energy
+    MessageUpdate(Message),         // New message update
+    StateUpdate(String),            // Update the simulation's state
 }
 
+/// Main simulation struct
 pub struct Simulation {
     config: Config,
     agents: HashMap<String, Agent>,
@@ -44,15 +47,16 @@ pub struct Simulation {
 }
 
 impl Simulation {
+    /// Initializes a new simulation with the given configuration and channels.
     pub fn new(
         config: Config,
         ui_tx: Sender<SimulationToUI>,
         sim_rx: Receiver<UIToSimulation>,
     ) -> Self {
-        // Créer un runtime Tokio pour les appels asynchrones à Ollama
+        // Create a Tokio runtime for async calls to Ollama
         let runtime = Runtime::new().expect("Failed to create Tokio runtime");
 
-        // Initialiser les agents à partir de la configuration
+        // Initialize agents based on configuration
         let mut agents = HashMap::new();
         for agent_config in &config.agents {
             let id = Uuid::new_v4().to_string();
@@ -66,7 +70,7 @@ impl Simulation {
                 agent_config.initial_position,
             );
 
-            // Définir le modèle Ollama (on pourrait l'ajouter dans la config)
+            // Set the Ollama model (this could be added to the config later)
             agent.set_model("llama3.2:latest".to_string());
 
             agents.insert(id, agent);
@@ -86,8 +90,9 @@ impl Simulation {
         }
     }
 
+    /// Starts the simulation loop, listening for commands and processing the simulation.
     pub fn run(&mut self) {
-        // Attendre le signal de démarrage
+        // Wait for the start signal
         while let Ok(command) = self.sim_rx.recv() {
             match command {
                 UIToSimulation::Start => {
@@ -96,12 +101,12 @@ impl Simulation {
                 }
                 UIToSimulation::SetDiscussionTopic(topic) => {
                     self.discussion_topic = Some(topic.clone());
-                    // Envoyer un message de mise à jour à l'UI
+                    // Send a topic update to the UI
                     let _ = self.ui_tx.send(SimulationToUI::StateUpdate(format!(
-                        "Sujet de discussion défini: {}",
+                        "Discussion topic set: {}",
                         topic
                     )));
-                    // Démarrer la conversation immédiatement si le sujet est défini
+                    // Start conversation immediately if the topic is set
                     self.start_conversation(&topic);
                 }
                 UIToSimulation::UserMessage(recipient, content) => {
@@ -111,12 +116,12 @@ impl Simulation {
             }
         }
 
-        // Boucle principale de simulation
+        // Main simulation loop
         let mut last_tick_time = Instant::now();
-        let tick_duration = Duration::from_millis(1000 / 10); // 10 ticks par seconde
+        let tick_duration = Duration::from_millis(1000 / 10); // 10 ticks per second
 
         while self.running {
-            // Vérifier les commandes de l'UI
+            // Check UI commands
             if let Ok(command) = self.sim_rx.try_recv() {
                 match command {
                     UIToSimulation::Pause => self.running = false,
@@ -130,44 +135,45 @@ impl Simulation {
                 }
             }
 
-            // Si en pause, attendre
+            // If paused, wait
             if !self.running {
                 thread::sleep(Duration::from_millis(100));
                 continue;
             }
 
-            // Vérifier si c'est le moment de faire un tick
+            // Check if it's time for a tick
             let now = Instant::now();
             if now.duration_since(last_tick_time) >= tick_duration {
                 self.tick();
                 last_tick_time = now;
             } else {
-                // Attendre un peu pour ne pas surcharger le CPU
+                // Wait a bit to avoid overloading the CPU
                 thread::sleep(Duration::from_millis(10));
             }
         }
 
-        // Envoyer un message final à l'UI
+        // Send a final state update to the UI
         let _ = self.ui_tx.send(SimulationToUI::StateUpdate(
-            "Simulation arrêtée".to_string(),
+            "Simulation stopped".to_string(),
         ));
     }
 
+    /// Executes a tick in the simulation, updating agent states, messages, and energy levels.
     fn tick(&mut self) {
         self.current_tick += 1;
         let _ = self
             .ui_tx
             .send(SimulationToUI::TickUpdate(self.current_tick));
 
-        // 1. Collecter tous les messages reçus dans ce tick
+        // 1. Collect all received messages during this tick
         for message in &self.messages {
-            // Ajouter à l'historique global
+            // Add to global conversation history
             self.conversation_manager.add_message(message.clone());
 
-            // Pour chaque agent (sauf l'expéditeur), collecter ce qu'il "entend"
+            // For each agent (except the sender), collect what it "hears"
             for (_, agent) in self.agents.iter_mut() {
                 if agent.name != message.sender {
-                    // L'agent entend ce message
+                    // The agent hears this message
                     agent.next_prompt.push_str(&format!(
                         "[{}→{}]: {}\n",
                         message.sender,
@@ -177,28 +183,28 @@ impl Simulation {
                 }
             }
 
-            // Notifier l'UI
+            // Notify the UI about the new message
             let _ = self
                 .ui_tx
                 .send(SimulationToUI::MessageUpdate(message.clone()));
         }
 
-        // 2. Faire répondre les agents qui ont entendu quelque chose
+        // 2. Make agents respond to the messages they heard
         let mut new_messages = Vec::new();
 
         for (_, agent) in self.agents.iter_mut() {
             if !agent.next_prompt.is_empty() {
-                // L'agent a entendu des messages et va répondre
+                // The agent has heard messages and will respond
                 agent.state = AgentState::Thinking;
 
-                // Notifier l'UI du changement d'état
+                // Notify the UI about the state change
                 let _ = self.ui_tx.send(SimulationToUI::AgentUpdate(
                     agent.name.clone(),
                     agent.state.clone(),
                     agent.energy,
                 ));
 
-                // Déterminer le destinataire (pour l'instant basique, on répond au dernier message)
+                // Determine the recipient (for now, we respond to the last message)
                 let recipient = if agent.next_prompt.contains("→") {
                     agent
                         .next_prompt
@@ -212,12 +218,12 @@ impl Simulation {
                     "everyone".to_string()
                 };
 
-                // Générer une réponse
+                // Generate a response
                 if let Ok(response_text) = self
                     .runtime
                     .block_on(async { agent.generate_response_from_prompt().await })
                 {
-                    // Créer un message de réponse
+                    // Create a response message
                     let response_message = Message {
                         id: Uuid::new_v4().to_string(),
                         timestamp: Utc::now(),
@@ -226,29 +232,29 @@ impl Simulation {
                         content: json!(response_text),
                     };
 
-                    // Ajouter à la liste des nouveaux messages
+                    // Add to the list of new messages
                     new_messages.push(response_message.clone());
 
-                    // Notifier l'UI
+                    // Notify the UI about the response
                     let _ = self
                         .ui_tx
                         .send(SimulationToUI::MessageUpdate(response_message));
 
-                    // Mettre à jour l'état de l'agent
+                    // Update agent state
                     agent.state = AgentState::Speaking;
                     agent.energy -= 1.0;
                 }
 
-                // Réinitialiser le prompt pour le prochain tick
+                // Reset the prompt for the next tick
                 agent.next_prompt.clear();
             }
         }
 
-        // Vider les messages actuels et ajouter les nouveaux
+        // Clear current messages and add new ones
         self.messages.clear();
         self.messages.extend(new_messages);
 
-        // Mise à jour de l'énergie des agents (code existant)
+        // Update agents' energy levels
         for (_, agent) in self.agents.iter_mut() {
             agent.energy += 0.1;
             if agent.energy > 100.0 {
@@ -263,10 +269,11 @@ impl Simulation {
         }
     }
 
+    /// Starts the conversation with a given topic.
     fn start_conversation(&mut self, topic: &str) {
-        // Choisir un agent pour commencer la conversation
+        // Choose an agent to start the conversation
         if let Some((starter_id, starter)) = self.agents.iter().next() {
-            // Choisir un destinataire aléatoire différent de l'expéditeur
+            // Choose a random recipient different from the sender
             let recipient = self
                 .agents
                 .iter()
@@ -274,54 +281,55 @@ impl Simulation {
                 .map(|(_, agent)| agent.name.clone())
                 .unwrap_or_else(|| "everyone".to_string());
 
-            // Créer un message initial
+            // Create an initial message
             let initial_message = Message {
                 id: Uuid::new_v4().to_string(),
                 timestamp: Utc::now(),
-                sender: "Système".to_string(),
+                sender: "System".to_string(),
                 recipient: starter.name.clone(),
-                content: json!(format!("Parlons de {}. Qu'en penses-tu?", topic)),
+                content: json!(format!("Let's talk about {}. What do you think?", topic)),
             };
 
-            // Ajouter le message à la liste
+            // Add the message to the list
             self.messages.push(initial_message.clone());
 
-            // Envoyer le message à l'UI
+            // Send the message to the UI
             let _ = self
                 .ui_tx
                 .send(SimulationToUI::MessageUpdate(initial_message));
             let _ = self.ui_tx.send(SimulationToUI::StateUpdate(format!(
-                "Conversation démarrée sur le sujet: {}",
+                "Conversation started on topic: {}",
                 topic
             )));
         }
     }
 
+    /// Handles user messages and passes them to the relevant agent.
     fn handle_user_message(&mut self, recipient: &str, content: &str) {
-        // Créer un message utilisateur
+        // Create a user message
         let user_message = Message {
             id: Uuid::new_v4().to_string(),
             timestamp: Utc::now(),
-            sender: "Utilisateur".to_string(),
+            sender: "User".to_string(),
             recipient: recipient.to_string(),
             content: json!(content),
         };
 
-        // Notifier l'UI
+        // Notify the UI about the user message
         let _ = self
             .ui_tx
             .send(SimulationToUI::MessageUpdate(user_message.clone()));
 
-        // Ajouter à l'historique
+        // Add to the conversation history
         self.conversation_manager.add_message(user_message.clone());
 
-        // Ajouter au next_prompt de l'agent destinataire pour traitement immédiat
+        // Add the message to the recipient agent's next prompt for immediate processing
         if let Some(agent) = self.agents.values_mut().find(|a| a.name == recipient) {
             agent
                 .next_prompt
-                .push_str(&format!("[Utilisateur→{}]: {}\n", recipient, content));
+                .push_str(&format!("[User→{}]: {}\n", recipient, content));
 
-            // Traiter immédiatement la réponse
+            // Process the response immediately
             agent.state = AgentState::Thinking;
             let _ = self.ui_tx.send(SimulationToUI::AgentUpdate(
                 agent.name.clone(),
@@ -329,40 +337,40 @@ impl Simulation {
                 agent.energy,
             ));
 
-            // Stocker le nom de l'agent pour l'utiliser après la libération de l'emprunt
+            // Store the agent's name for later use
             let agent_name = agent.name.clone();
 
-            // Générer une réponse
+            // Generate a response
             let response_result = self
                 .runtime
                 .block_on(async { agent.generate_response_from_prompt().await });
 
-            // Libérer l'emprunt de agent en sortant du if let
+            // Release the agent lock once we're done
             if let Ok(response_text) = response_result {
                 let response_message = Message {
                     id: Uuid::new_v4().to_string(),
                     timestamp: Utc::now(),
                     sender: agent_name.clone(),
-                    recipient: "Utilisateur".to_string(),
+                    recipient: "User".to_string(),
                     content: json!(response_text),
                 };
 
-                // Notifier l'UI
+                // Notify the UI about the agent's response
                 let _ = self
                     .ui_tx
                     .send(SimulationToUI::MessageUpdate(response_message));
 
-                // Maintenant on peut emprunter self.agents à nouveau
+                // Update the state of other agents
                 for (_, other_agent) in self.agents.iter_mut() {
                     if other_agent.name != agent_name {
                         other_agent.next_prompt.push_str(&format!(
-                            "[{}→Utilisateur]: {}\n",
+                            "[{}→User]: {}\n",
                             agent_name, response_text
                         ));
                     }
                 }
 
-                // Mise à jour de l'état de l'agent avec un nouvel emprunt
+                // Update the agent's state with the new energy level
                 if let Some(agent) = self.agents.values_mut().find(|a| a.name == agent_name) {
                     agent.state = AgentState::Speaking;
                     agent.energy -= 1.0;
@@ -374,13 +382,13 @@ impl Simulation {
                 }
             }
 
-            // Réinitialiser le prompt (besoin d'un nouvel emprunt)
+            // Clear the prompt for the next turn
             if let Some(agent) = self.agents.values_mut().find(|a| a.name == agent_name) {
                 agent.next_prompt.clear();
             }
         } else {
             let _ = self.ui_tx.send(SimulationToUI::StateUpdate(format!(
-                "Agent '{}' non trouvé.",
+                "Agent '{}' not found.",
                 recipient
             )));
         }
@@ -394,7 +402,7 @@ mod tests {
     use std::time::Duration;
 
     fn setup_simulation() -> (Simulation, Sender<UIToSimulation>, Receiver<SimulationToUI>) {
-        let config = Config::default(); // Assurez-vous d'avoir une implémentation par défaut pour les tests
+        let config = Config::default(); // Ensure you have a default implementation for testing
         let (ui_tx, ui_rx) = mpsc::channel();
         let (sim_tx, sim_rx) = mpsc::channel();
         let simulation = Simulation::new(config, ui_tx, sim_rx);
