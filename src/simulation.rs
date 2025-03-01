@@ -2,7 +2,7 @@
 use crate::agent::Agent;
 use crate::config::Config;
 use crate::conversation_manager::ConversationManager;
-use crate::message::{Message, MessageContent};
+use crate::message::Message;
 use crate::personality::get_personality_template;
 use crate::state::AgentState;
 use chrono::Utc;

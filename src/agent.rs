@@ -1,12 +1,11 @@
 // agent.rs
-use crate::message::{Message, MessageContent};
+use crate::message::Message;
 use crate::personality::Personality;
 use crate::state::AgentState;
 use chrono::Utc;
 use ollama_rs::Ollama;
-use ollama_rs::generation::completion::{request::GenerationRequest, GenerationContext};
+use ollama_rs::generation::completion::request::GenerationRequest;
 use serde_json::json;
-use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 #[derive(Debug, Clone)]

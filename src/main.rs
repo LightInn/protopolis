@@ -9,7 +9,7 @@ mod ui;
 mod conversation_manager;
 
 use crate::config::Config;
-use crate::simulation::{Simulation, SimulationToUI, UIToSimulation};
+use crate::simulation::Simulation;
 use crate::ui::UI;
 use std::path::Path;
 use std::sync::mpsc;
