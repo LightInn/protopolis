@@ -5,10 +5,8 @@ use crate::state::AgentState;
 use colored::*;
 use std::collections::HashMap;
 use std::io::{self, Write};
-use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
-use std::time::Duration;
 
 const COLORS: [&str; 8] = [
     "red", "green", "yellow", "blue", "magenta", "cyan", "bright_red", "bright_green"

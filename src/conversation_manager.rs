@@ -1,6 +1,5 @@
 // conversation_manager.rs
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use crate::message::Message;
 
 pub struct ConversationManager {
