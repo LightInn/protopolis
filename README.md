@@ -1,23 +1,25 @@
 # 🤖 Protopolis
 
-**Un framework de simulation d'agents IA en Rust**
+**A Rust-based AI agent simulation framework**
 
-**Protopolis est un projet permettant de créer et de simuler des interactions entre agents IA dans un environnement
-terminal coloré. Les agents peuvent communiquer entre eux et avec l'utilisateur selon différents états et niveaux d'
-énergie.**
+**Protopolis is a project that allows you to create and simulate interactions between AI agents in a colorful terminal environment. Agents can communicate with each other and with the user according to different states and energy levels.**
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/LightInn/protopolis/release.yml?style=for-the-badge)](https://github.com/LightInn/protopolis/actions)
 [![Crates.io](https://img.shields.io/crates/v/protopolis?style=for-the-badge)](https://crates.io/crates/protopolis)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](https://github.com/LightInn/protopolis)
 [![Downloads](https://img.shields.io/crates/d/protopolis?style=for-the-badge)](https://crates.io/crates/protopolis)
 
-## 📋 Fonctionnalités
+<p align="center"> 
+  <img src="showcase/protopolis.gif" width="800" alt="Agents discussing philosophy"> 
+</p> 
 
-- **🧠 Simulation d'agents** avec différents états (Idle, Thinking, Speaking)
-- **💬 Système de messagerie** entre agents et avec l'utilisateur
-- **🌈 Interface terminal colorée** pour une meilleure visualisation
-- **⚡ Gestion d'énergie** des agents
-- **🔄 Commandes simples** pour contrôler la simulation
+## 📋 Features
+
+- **🧠 Agent Simulation** with different states (Idle, Thinking, Speaking)
+- **💬 Messaging System** between agents and with the user
+- **🌈 Colorful Terminal Interface** for better visualization
+- **⚡ Energy Management** for agents
+- **🔄 Simple Commands** to control the simulation
 
 ## 🛠️ Installation
 
@@ -27,45 +29,45 @@ cd protopolis
 cargo build --release
 ```
 
-## 🎮 Utilisation
+## 🎮 Usage
 
-Pour lancer la simulation :
+To start the simulation:
 
 ```bash
 cargo run --release
 ```
 
-### Commandes disponibles
+### Available Commands
 
-- `start` - Démarrer la simulation
-- `pause` - Mettre en pause la simulation
-- `resume` - Reprendre la simulation
-- `stop` - Arrêter la simulation
-- `exit` - Quitter l'application
-- `topic <sujet>` - Définir un nouveau sujet de discussion
-- `msg <agent> <message>` - Envoyer un message à un agent spécifique
+- `start` - Start the simulation
+- `pause` - Pause the simulation
+- `resume` - Resume the simulation
+- `stop` - Stop the simulation
+- `exit` - Exit the application
+- `topic <subject>` - Set a new discussion topic
+- `msg <agent> <message>` - Send a message to a specific agent
 
 ## 🏗️ Architecture
 
-Le projet est construit autour de plusieurs composants clés :
+The project is built around several key components:
 
-- **Agents** - Entités avec états et comportements
-- **Système de messages** - Communication asynchrone entre agents
-- **Interface utilisateur** - Affichage coloré dans le terminal
-- **Simulation** - Orchestration des interactions
+- **Agents** - Entities with states and behaviors
+- **Messaging System** - Asynchronous communication between agents
+- **User Interface** - Colorful display in the terminal
+- **Simulation** - Orchestration of interactions
 
 ## 🗺️ Roadmap
 
-- [x] Interface terminal de base
-- [x] Système de couleurs pour les agents
-- [x] Communication entre agents
-- [ ] Personnalités d'agents plus complexes
-- [ ] Sauvegarde/chargement de simulations
-- [ ] Visualisation graphique des interactions
+- [x] Basic terminal interface
+- [x] Color system for agents
+- [x] Communication between agents
+- [ ] More complex agent personalities
+- [ ] Save/load simulations
+- [ ] Graphical visualization of interactions
 
 ## 🤝 Contribution
 
-Les contributions sont les bienvenues ! N'hésitez pas à ouvrir une issue ou une pull request.
+Contributions are welcome! Feel free to open an issue or a pull request.
 
 ## 📚 Inspired By
 
@@ -82,16 +84,3 @@ Les contributions sont les bienvenues ! N'hésitez pas à ouvrir une issue ou un
 ## License
 
 MIT © 2025 Breval LE FLOCH
-
-
-
-
-
-
-
-
-
-
-
-
-
