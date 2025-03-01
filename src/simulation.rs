@@ -1,6 +1,7 @@
 // simulation.rs
 use crate::agent::Agent;
 use crate::config::Config;
+use crate::conversation_manager::ConversationManager;
 use crate::message::{Message, MessageContent};
 use crate::personality::get_personality_template;
 use crate::state::AgentState;
@@ -19,6 +20,7 @@ pub enum UIToSimulation {
     Resume,
     Stop,
     SetDiscussionTopic(String),
+    UserMessage(String, String),
 }
 
 pub enum SimulationToUI {
@@ -38,6 +40,7 @@ pub struct Simulation {
     sim_rx: Receiver<UIToSimulation>,
     discussion_topic: Option<String>,
     runtime: Runtime,
+    conversation_manager: ConversationManager,
 }
 
 impl Simulation {
@@ -79,6 +82,7 @@ impl Simulation {
             sim_rx,
             discussion_topic: None,
             runtime,
+            conversation_manager: ConversationManager::new(),
         }
     }
 
@@ -93,11 +97,15 @@ impl Simulation {
                 UIToSimulation::SetDiscussionTopic(topic) => {
                     self.discussion_topic = Some(topic.clone());
                     // Envoyer un message de mise à jour à l'UI
-                    let _ = self.ui_tx.send(SimulationToUI::StateUpdate(
-                        format!("Sujet de discussion défini: {}", topic)
-                    ));
+                    let _ = self.ui_tx.send(SimulationToUI::StateUpdate(format!(
+                        "Sujet de discussion défini: {}",
+                        topic
+                    )));
                     // Démarrer la conversation immédiatement si le sujet est défini
                     self.start_conversation(&topic);
+                }
+                UIToSimulation::UserMessage(recipient, content) => {
+                    self.handle_user_message(&recipient, &content);
                 }
                 _ => continue,
             }
@@ -140,72 +148,117 @@ impl Simulation {
         }
 
         // Envoyer un message final à l'UI
-        let _ = self.ui_tx.send(SimulationToUI::StateUpdate("Simulation arrêtée".to_string()));
+        let _ = self.ui_tx.send(SimulationToUI::StateUpdate(
+            "Simulation arrêtée".to_string(),
+        ));
     }
 
     fn tick(&mut self) {
         self.current_tick += 1;
+        let _ = self
+            .ui_tx
+            .send(SimulationToUI::TickUpdate(self.current_tick));
 
-        // Envoyer une mise à jour du tick à l'UI
-        let _ = self.ui_tx.send(SimulationToUI::TickUpdate(self.current_tick));
+        // 1. Collecter tous les messages reçus dans ce tick
+        for message in &self.messages {
+            // Ajouter à l'historique global
+            self.conversation_manager.add_message(message.clone());
 
-        // Traiter les messages en attente
-        let mut new_messages = Vec::new();
-
-        // Collecter les messages à traiter
-        let messages_to_process: Vec<(String, Message)> = self.messages.iter()
-            .filter(|msg| {
-                // Filtrer les messages qui n'ont pas encore été traités
-                let recipient = &msg.recipient;
-                self.agents.values().any(|agent| agent.name == *recipient)
-            })
-            .map(|msg| {
-                // Trouver l'ID de l'agent destinataire
-                let recipient_id = self.agents.iter()
-                    .find(|(_, agent)| agent.name == msg.recipient)
-                    .map(|(id, _)| id.clone())
-                    .unwrap_or_default();
-
-                (recipient_id, msg.clone())
-            })
-            .collect();
-
-        // Traiter chaque message
-        for (agent_id, message) in messages_to_process {
-            if let Some(agent) = self.agents.get_mut(&agent_id) {
-                if let Some(response) = agent.process_message(&message, &self.runtime) {
-                    new_messages.push(response);
-
-                    // Mettre à jour l'état de l'agent dans l'UI
-                    let _ = self.ui_tx.send(SimulationToUI::AgentUpdate(
-                        agent.name.clone(),
-                        agent.state.clone(),
-                        agent.energy
+            // Pour chaque agent (sauf l'expéditeur), collecter ce qu'il "entend"
+            for (_, agent) in self.agents.iter_mut() {
+                if agent.name != message.sender {
+                    // L'agent entend ce message
+                    agent.next_prompt.push_str(&format!(
+                        "[{}→{}]: {}\n",
+                        message.sender,
+                        message.recipient,
+                        message.content.to_string().trim_matches('"')
                     ));
                 }
             }
+
+            // Notifier l'UI
+            let _ = self
+                .ui_tx
+                .send(SimulationToUI::MessageUpdate(message.clone()));
         }
 
-        // Ajouter les nouveaux messages
-        for message in new_messages {
-            // Envoyer le message à l'UI
-            let _ = self.ui_tx.send(SimulationToUI::MessageUpdate(message.clone()));
-            self.messages.push(message);
+        // 2. Faire répondre les agents qui ont entendu quelque chose
+        let mut new_messages = Vec::new();
+
+        for (_, agent) in self.agents.iter_mut() {
+            if !agent.next_prompt.is_empty() {
+                // L'agent a entendu des messages et va répondre
+                agent.state = AgentState::Thinking;
+
+                // Notifier l'UI du changement d'état
+                let _ = self.ui_tx.send(SimulationToUI::AgentUpdate(
+                    agent.name.clone(),
+                    agent.state.clone(),
+                    agent.energy,
+                ));
+
+                // Déterminer le destinataire (pour l'instant basique, on répond au dernier message)
+                let recipient = if agent.next_prompt.contains("→") {
+                    agent
+                        .next_prompt
+                        .lines()
+                        .last()
+                        .and_then(|line| line.split('→').next())
+                        .unwrap_or("everyone")
+                        .trim_start_matches('[')
+                        .to_string()
+                } else {
+                    "everyone".to_string()
+                };
+
+                // Générer une réponse
+                if let Ok(response_text) = self
+                    .runtime
+                    .block_on(async { agent.generate_response_from_prompt().await })
+                {
+                    // Créer un message de réponse
+                    let response_message = Message {
+                        id: Uuid::new_v4().to_string(),
+                        timestamp: Utc::now(),
+                        sender: agent.name.clone(),
+                        recipient,
+                        content: json!(response_text),
+                    };
+
+                    // Ajouter à la liste des nouveaux messages
+                    new_messages.push(response_message.clone());
+
+                    // Notifier l'UI
+                    let _ = self
+                        .ui_tx
+                        .send(SimulationToUI::MessageUpdate(response_message));
+
+                    // Mettre à jour l'état de l'agent
+                    agent.state = AgentState::Speaking;
+                    agent.energy -= 1.0;
+                }
+
+                // Réinitialiser le prompt pour le prochain tick
+                agent.next_prompt.clear();
+            }
         }
 
-        // Mettre à jour l'énergie des agents
-        for (id, agent) in self.agents.iter_mut() {
-            // Régénération passive d'énergie
+        // Vider les messages actuels et ajouter les nouveaux
+        self.messages.clear();
+        self.messages.extend(new_messages);
+
+        // Mise à jour de l'énergie des agents (code existant)
+        for (_, agent) in self.agents.iter_mut() {
             agent.energy += 0.1;
             if agent.energy > 100.0 {
                 agent.energy = 100.0;
             }
 
-            // Envoyer une mise à jour à l'UI
             let _ = self.ui_tx.send(SimulationToUI::AgentUpdate(
                 agent.name.clone(),
                 agent.state.clone(),
-                agent.energy
+                agent.energy,
             ));
         }
     }
@@ -214,7 +267,9 @@ impl Simulation {
         // Choisir un agent pour commencer la conversation
         if let Some((starter_id, starter)) = self.agents.iter().next() {
             // Choisir un destinataire aléatoire différent de l'expéditeur
-            let recipient = self.agents.iter()
+            let recipient = self
+                .agents
+                .iter()
                 .find(|(id, _)| *id != starter_id)
                 .map(|(_, agent)| agent.name.clone())
                 .unwrap_or_else(|| "everyone".to_string());
@@ -232,16 +287,105 @@ impl Simulation {
             self.messages.push(initial_message.clone());
 
             // Envoyer le message à l'UI
-            let _ = self.ui_tx.send(SimulationToUI::MessageUpdate(initial_message));
-            let _ = self.ui_tx.send(SimulationToUI::StateUpdate(
-                format!("Conversation démarrée sur le sujet: {}", topic)
+            let _ = self
+                .ui_tx
+                .send(SimulationToUI::MessageUpdate(initial_message));
+            let _ = self.ui_tx.send(SimulationToUI::StateUpdate(format!(
+                "Conversation démarrée sur le sujet: {}",
+                topic
+            )));
+        }
+    }
+
+    fn handle_user_message(&mut self, recipient: &str, content: &str) {
+        // Créer un message utilisateur
+        let user_message = Message {
+            id: Uuid::new_v4().to_string(),
+            timestamp: Utc::now(),
+            sender: "Utilisateur".to_string(),
+            recipient: recipient.to_string(),
+            content: json!(content),
+        };
+
+        // Notifier l'UI
+        let _ = self
+            .ui_tx
+            .send(SimulationToUI::MessageUpdate(user_message.clone()));
+
+        // Ajouter à l'historique
+        self.conversation_manager.add_message(user_message.clone());
+
+        // Ajouter au next_prompt de l'agent destinataire pour traitement immédiat
+        if let Some(agent) = self.agents.values_mut().find(|a| a.name == recipient) {
+            agent
+                .next_prompt
+                .push_str(&format!("[Utilisateur→{}]: {}\n", recipient, content));
+
+            // Traiter immédiatement la réponse
+            agent.state = AgentState::Thinking;
+            let _ = self.ui_tx.send(SimulationToUI::AgentUpdate(
+                agent.name.clone(),
+                agent.state.clone(),
+                agent.energy,
             ));
+
+            // Stocker le nom de l'agent pour l'utiliser après la libération de l'emprunt
+            let agent_name = agent.name.clone();
+
+            // Générer une réponse
+            let response_result = self
+                .runtime
+                .block_on(async { agent.generate_response_from_prompt().await });
+
+            // Libérer l'emprunt de agent en sortant du if let
+            if let Ok(response_text) = response_result {
+                let response_message = Message {
+                    id: Uuid::new_v4().to_string(),
+                    timestamp: Utc::now(),
+                    sender: agent_name.clone(),
+                    recipient: "Utilisateur".to_string(),
+                    content: json!(response_text),
+                };
+
+                // Notifier l'UI
+                let _ = self
+                    .ui_tx
+                    .send(SimulationToUI::MessageUpdate(response_message));
+
+                // Maintenant on peut emprunter self.agents à nouveau
+                for (_, other_agent) in self.agents.iter_mut() {
+                    if other_agent.name != agent_name {
+                        other_agent.next_prompt.push_str(&format!(
+                            "[{}→Utilisateur]: {}\n",
+                            agent_name, response_text
+                        ));
+                    }
+                }
+
+                // Mise à jour de l'état de l'agent avec un nouvel emprunt
+                if let Some(agent) = self.agents.values_mut().find(|a| a.name == agent_name) {
+                    agent.state = AgentState::Speaking;
+                    agent.energy -= 1.0;
+                    let _ = self.ui_tx.send(SimulationToUI::AgentUpdate(
+                        agent.name.clone(),
+                        agent.state.clone(),
+                        agent.energy,
+                    ));
+                }
+            }
+
+            // Réinitialiser le prompt (besoin d'un nouvel emprunt)
+            if let Some(agent) = self.agents.values_mut().find(|a| a.name == agent_name) {
+                agent.next_prompt.clear();
+            }
+        } else {
+            let _ = self.ui_tx.send(SimulationToUI::StateUpdate(format!(
+                "Agent '{}' non trouvé.",
+                recipient
+            )));
         }
     }
 }
-
-
-
 
 #[cfg(test)]
 mod tests {

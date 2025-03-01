@@ -6,6 +6,7 @@ mod personality;
 mod simulation;
 mod state;
 mod ui;
+mod conversation_manager;
 
 use crate::config::Config;
 use crate::simulation::{Simulation, SimulationToUI, UIToSimulation};
