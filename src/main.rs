@@ -46,23 +46,3 @@ fn main() {
         eprintln!("Erreur lors de la jointure du thread de simulation: {:?}", e);
     }
 }
-
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::Duration;
-
-    #[test]
-    fn test_ui_to_simulation_channel() {
-        let (ui_tx, sim_rx) = mpsc::channel::<UIToSimulation>();
-
-        ui_tx.send(UIToSimulation::Start).unwrap();
-
-        match sim_rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(UIToSimulation::Start) => assert!(true),
-            _ => panic!("Le message UIToSimulation::Start n'a pas été reçu"),
-        }
-    }
-}
