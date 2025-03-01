@@ -1,6 +1,6 @@
 # 🤖 Protopolis
 
-**A Rust-based AI agent simulation framework**
+**A Rust-based AI multi-agent simulation framework (using Ollama)**
 
 **Protopolis is a project that allows you to create and simulate interactions between AI agents in a colorful terminal environment. Agents can communicate with each other and with the user according to different states and energy levels.**
 
@@ -13,6 +13,8 @@
   <img src="showcase/protopolis.gif" width="800" alt="Agents discussing philosophy"> 
 </p> 
 
+> **⚠️ Warning:** This project is a work in progress (WIP) and will have frequent updates that may break various features.
+
 ## 📋 Features
 
 - **🧠 Agent Simulation** with different states (Idle, Thinking, Speaking)
@@ -22,6 +24,8 @@
 - **🔄 Simple Commands** to control the simulation
 
 ## 🛠️ Installation
+
+> **⚠️ Note:** Make sure to have [Ollama](https://ollama.ai) installed with the `llama3.2` model before continuing.
 
 ```bash
 git clone https://github.com/LightInn/protopolis
