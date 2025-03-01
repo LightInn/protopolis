@@ -1,116 +1,75 @@
-# 🚀 AI Agents Framework 
+# 🤖 Protopolis
 
-**A blazing-fast, modular, and extensible multi-agent AI framework in Rust**  
-*"Simulating intelligence at the speed of thought"*  
+**Un framework de simulation d'agents IA en Rust**
+
+**Protopolis est un projet permettant de créer et de simuler des interactions entre agents IA dans un environnement
+terminal coloré. Les agents peuvent communiquer entre eux et avec l'utilisateur selon différents états et niveaux d'
+énergie.**
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/LightInn/protopolis/release.yml?style=for-the-badge)](https://github.com/LightInn/protopolis/actions)
 [![Crates.io](https://img.shields.io/crates/v/protopolis?style=for-the-badge)](https://crates.io/crates/protopolis)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](https://github.com/LightInn/protopolis)
 [![Downloads](https://img.shields.io/crates/d/protopolis?style=for-the-badge)](https://crates.io/crates/protopolis)
 
-<p align="center">
-  <img src="showcase/protopolis.gif" width="800" alt="Agents discussing philosophy">
-</p>
+## 📋 Fonctionnalités
 
-## 🌟 Features
-
-- **⚡ Blazing-fast** async architecture (built on Tokio)
-- **🧩 Modular components** for agents, world simulation, and memory
-- **🌈 Colorful terminal UI** with real-time agent thought visualization
-- **🤖 LLM Integration** through Ollama (supports Llama 3, Mistral, etc.)
-- **📈 Auto-synthesized memory** with deep memory consolidation
-- **🔒 JSON validation** with automatic retry system
-- **📊 Performance metrics** built-in (see benchmark below)
-
-```rust
-// Create philosophical AI agents
-let mut world = World::new();
-world.add_agent(Agent::new(1, "Socrates", "curious"));
-world.add_agent(Agent::new(2, "Plato", "analytical"));
-world.run().await;
-```
-
-## 🚦 Performance Benchmarks
-
-| Framework      | Agents | Req/s | Memory Usage | Latency (ms) |
-|----------------|--------|-------|--------------|--------------|
-| **AI Agents**  | 100    | 1.2k  | 58MB         | 12.3         |
-| Python         | 100    | 320   | 210MB        | 89.1         |
-| Node.js        | 100    | 450   | 150MB        | 64.5         |
-
-*Benchmarked on M2 MacBook Pro, 100 concurrent agents discussing ethics*
+- **🧠 Simulation d'agents** avec différents états (Idle, Thinking, Speaking)
+- **💬 Système de messagerie** entre agents et avec l'utilisateur
+- **🌈 Interface terminal colorée** pour une meilleure visualisation
+- **⚡ Gestion d'énergie** des agents
+- **🔄 Commandes simples** pour contrôler la simulation
 
 ## 🛠️ Installation
 
 ```bash
-cargo add ....
-```
-
-Or clone the repository:
-```bash
 git clone https://github.com/LightInn/protopolis
 cd protopolis
+cargo build --release
+```
+
+## 🎮 Utilisation
+
+Pour lancer la simulation :
+
+```bash
 cargo run --release
 ```
 
-## 🎮 Quick Start
+### Commandes disponibles
 
-```rust
-use ai_agents::{Agent, World};
+- `start` - Démarrer la simulation
+- `pause` - Mettre en pause la simulation
+- `resume` - Reprendre la simulation
+- `stop` - Arrêter la simulation
+- `exit` - Quitter l'application
+- `topic <sujet>` - Définir un nouveau sujet de discussion
+- `msg <agent> <message>` - Envoyer un message à un agent spécifique
 
-#[tokio::main]
-async fn main() {
-    let mut world = World::new();
-    
-    // Create agents with different personalities
-    world.add_agent(Agent::new(1, "Alice", "optimistic"));
-    world.add_agent(Agent::new(2, "Bob", "skeptical"));
-    
-    // Start the simulation
-    world.set_topic("The meaning of consciousness");
-    world.run().await;
-}
-```
+## 🏗️ Architecture
 
-## 🌌 Architecture Overview
+Le projet est construit autour de plusieurs composants clés :
 
-```mermaid
-graph TD
-    A[World Simulation] --> B[Agent 1]
-    A --> C[Agent 2]
-    A --> D[Agent N]
-    B --> E[Async Message Bus]
-    C --> E
-    D --> E
-    E --> F[LLM Backend]
-    F --> G[Memory Synthesis]
-    G --> H[Global State]
-```
+- **Agents** - Entités avec états et comportements
+- **Système de messages** - Communication asynchrone entre agents
+- **Interface utilisateur** - Affichage coloré dans le terminal
+- **Simulation** - Orchestration des interactions
 
-## 🚧 Roadmap
+## 🗺️ Roadmap
 
-- [x] Core agent framework
-- [x] Ollama integration
-- [ ] Web search capability
-- [ ] Agent spawning system
-- [ ] Distributed mode
-- [ ] Browser demo (WASM)
+- [x] Interface terminal de base
+- [x] Système de couleurs pour les agents
+- [x] Communication entre agents
+- [ ] Personnalités d'agents plus complexes
+- [ ] Sauvegarde/chargement de simulations
+- [ ] Visualisation graphique des interactions
 
-## 🤝 Contributing
+## 🤝 Contribution
 
-We welcome contributions! Please follow our [contribution guidelines](CONTRIBUTING.md).
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Les contributions sont les bienvenues ! N'hésitez pas à ouvrir une issue ou une pull request.
 
 ## 📚 Inspired By
 
-- [Tokio](https://github.com/tokio-rs/tokio) - Async runtime
-- [Bevy](https://bevyengine.org/) - ECS architecture
-- [LangChain](https://github.com/langchain-ai/langchain) - LLM orchestration
+- [TyniTroupe](https://github.com/microsoft/TinyTroupe) - LLM-powered multiagent persona simulation
 
 ## 🔌 Powered By
 
@@ -123,3 +82,16 @@ We welcome contributions! Please follow our [contribution guidelines](CONTRIBUTI
 ## License
 
 MIT © 2025 Breval LE FLOCH
+
+
+
+
+
+
+
+
+
+
+
+
+
