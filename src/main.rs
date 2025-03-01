@@ -3,12 +3,12 @@
 // Module declarations
 mod agent;
 mod config;
+mod conversation_manager;
 mod message;
 mod personality;
 mod simulation;
 mod state;
 mod ui;
-mod conversation_manager;
 
 use crate::config::Config;
 use crate::simulation::Simulation;
@@ -24,7 +24,9 @@ fn main() {
         Ok(config) => config,
         Err(e) => {
             eprintln!("Error loading configuration: {}", e);
-            return;
+            let config = config::Config::default();
+            config.save(Path::new("config.json"));
+            config
         }
     };
 
