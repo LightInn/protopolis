@@ -4,8 +4,8 @@ use crate::message::Message;
 use crate::personality::Personality;
 use crate::state::AgentState;
 use chrono::Utc;
-use ollama_rs::Ollama;
 use ollama_rs::generation::completion::request::GenerationRequest;
+use ollama_rs::Ollama;
 use serde_json::json;
 use tokio::runtime::Runtime;
 
@@ -108,13 +108,13 @@ impl Agent {
         }
 
         // Generate a response using Ollama
-        let response = runtime.block_on(async {
-            self.generate_response(&message.content.to_string()).await
-        });
+        let response =
+            runtime.block_on(async { self.generate_response(&message.content.to_string()).await });
 
         if let Ok(response_text) = response {
             // Add response to conversation history
-            self.conversation_history.push(format!("{}: {}", self.name, response_text));
+            self.conversation_history
+                .push(format!("{}: {}", self.name, response_text));
 
             // Create a new message
             let response_message = Message {
@@ -175,9 +175,7 @@ impl Agent {
         // Final prompt
         let prompt = format!(
             "{}\n\nConversation history:\n{}\n\nRespond to: {}",
-            personality_desc,
-            history,
-            input
+            personality_desc, history, input
         );
 
         // Send request to the AI model
@@ -223,9 +221,7 @@ impl Agent {
         // Final prompt including recent messages
         let prompt = format!(
             "{}\n\nConversation history:\n{}\n\nRecent messages:\n{}\n\nHow would you respond?",
-            personality_desc,
-            history,
-            self.next_prompt
+            personality_desc, history, self.next_prompt
         );
 
         // Send request to the AI model

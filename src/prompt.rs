@@ -10,7 +10,11 @@ impl Prompt {
                                             You can move around the world, talk to other agents, or just observe.";
     pub const GET_MESSAGE: &'static str = "\n\n{1} -> {2} : {3}";
 
-    pub fn get_first_prompt( system_prompt: String,name: String, personality: Personality) -> String {
+    pub fn get_first_prompt(
+        system_prompt: String,
+        name: String,
+        personality: Personality,
+    ) -> String {
         Self::FIRST_PROMPT
             .to_string()
             .replace("{0}", system_prompt.as_str())
