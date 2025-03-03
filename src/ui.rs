@@ -170,7 +170,8 @@ impl UI {
         // Terminal setup
         enable_raw_mode()?;
         let mut stdout = stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        // execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        execute!(stdout, EnterAlternateScreen)?;
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
 
         // Render splash screen
@@ -229,9 +230,10 @@ impl UI {
                             }
                             _ => {}
                         }
-                    } else if let Event::Mouse(_) = event::read()? {
-                        // Ignore mouse events
-                    }
+                        }
+                    // } else if let Event::Mouse(_) = event::read()? {
+                    //     // Ignore mouse events
+                    // }
                 }
             }
 
@@ -266,10 +268,10 @@ impl UI {
         execute!(
             terminal.backend_mut(),
             LeaveAlternateScreen,
-            DisableMouseCapture
+            // DisableMouseCapture
         )?;
         terminal.show_cursor()?;
-        
+
 
         Ok(())
     }
