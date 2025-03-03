@@ -61,8 +61,8 @@ impl Personality {
     /// - Improve decision logic to be influenced by personality traits.
     /// - Example: A more extraverted agent might favor social choices.
     pub fn influence_decision(&self, options: &[String]) -> usize {
-        let mut rng = rand::thread_rng();
-        rng.gen_range(0..options.len())
+        let mut rng = rand::rng();
+        rng.random_range(0..options.len())
     }
 }
 
