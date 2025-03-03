@@ -2,7 +2,7 @@ use crate::message::Message;
 use crate::simulation::{SimulationToUI, UIToSimulation};
 use crate::state::AgentState;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+    event::{self, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -10,7 +10,7 @@ use ratatui::prelude::CrosstermBackend;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
-    text::{Line, Span, Text},
+    text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame, Terminal,
 };
@@ -18,6 +18,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, stdout, Stdout};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
+use ratatui::layout::Position;
 
 // Map of colors for agents
 const COLORS: [Color; 8] = [
@@ -281,7 +282,7 @@ impl UI {
                 Constraint::Min(5),    // Main content
                 Constraint::Length(3), // Input
             ])
-            .split(f.size());
+            .split(f.area());
 
         // Title bar with status
         let title = Paragraph::new(vec![Line::from(vec![
@@ -316,7 +317,7 @@ impl UI {
         f.render_widget(input, chunks[2]);
 
         // Set cursor position
-        f.set_cursor(chunks[2].x + self.input.len() as u16 + 1, chunks[2].y + 1);
+        f.set_cursor_position(Position::new(chunks[2].x + self.input.len() as u16 + 1, chunks[2].y + 1));
     }
 
     /// Render the messages panel
@@ -394,11 +395,60 @@ impl UI {
         terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ) -> Result<(), io::Error> {
         let splash_text = r#"
-         ____             _        _ _
-        |  _ \ ___  _ __ | |_ __ _| | |_ ___
-        | |_) / _ \| '_ \| __/ _` | | __/ _ \
-        |  __/ (_) | | | | || (_| | | ||  __/
-        |_|   \___/|_| |_|\__\__,_|_|\__\___|
+                                                                                                                                                      
+                                                                                                                                                      
+                                                                                                                                                      
+                                                                                                                                                      
+                                    ^:cQJ/.                                                                                                           
+                           .`^' ..tM}';>:n*d                                                                                                          
+                   'L{.vZ.\wdk!I0Jq(\[#XkpZf:}vqI''')~'I'.                                                                                            
+                   'nd*fc+caMLkhooM#*x-#[/kc{}ZktU0JJ?p'   ''(.                                                                                       
+                    ~*#'MC?LhMpUj/<'~k|v*t-(0:Zfq{rooMwOzcoIa'^..                                                                                     
+                    'kt+.`'1#ba|. ..`''`!qd/ld]Z_0J#*mu(b**mm?~`.'!`                                                                                  
+                 '''x'c'+'I'^.C;'`'.   .'"_<Q>lrao_'^o#1##QkMkdZZC`'.                                                                                 
+               '''] '.``b~jj>'Z"Ipl?.'..`     <nj`"|J)bXoMMMw-Yo<j":0'                                                                                
+                'u.^)pU#ooZ^'XMoLX?`(,!i,``    .'.>'`'zf1hW#_])jhh~)''                                                                                
+               .<'.'h-,.q:   ,*(oooLW;I`:'';          .''n}0~[hM/^``'L`                                                                               
+              .':  ^.':'`'   >1mZJILaofwfr^I'^.'.         _'^>)z}~,^                                                                                  
+              -. '.Umq''   '}YkkLacr_'vhn]+O^`xn]."'''         _)0xJ''                                                                                
+            'm^''fa<+' .'`':*#' ..-MXo}'l??Lkc.:`              '^^{l`k'                                                                               
+          '']`  \v.`' .U|I>d`.'   ''I/d1`'O[m?'           `""|/``"~. .'p'                                                                             
+          lM{i`-<`c`,\-0,''          .Xa1z0ux,'Y;'^  'j<.'.    `^] '   ' ;k'                                                                          
+          "dza*/L>%w'''               '^Mmw}M;`'.   0]''          '||,.   .,^<0BY,`                                                                   
+          'Xp*o*qX.''                   kWap`^     `..     '/i'l/t>w`'      ''.'':!<x}o#n`                                                            
+          .' ''/X''                    '0##X'.   '.<:^.''  ..'1`^"I.               '  .'''x1rYb*?  '                                                  
+                                   .^  ..ahkU^'^.`_:Q        .'.''.                       .''. .<C+o ``.`' .`'.`                                      
+                               `'.o`])`':Y**M*hx}(>,`     `.``0t^                          ._''   '^mCo+ZX#w/fdt'..                                   
+                               `uf.ioaamkI.''^zJ:jl|,'  'urU*0n''                           '!f`' ..'Ubboz,q-{xZCIq'' '                               
+                               ZXMz0#o#o*|>!La|r~x`   ''Cq0a1;`                              1(. '    i,Qj{Cl,?C,}f0MMl^'.                            
+                              'La`x]d#kcpooZdpaw``^''-:w#pw``''                              `:[^.'.  '/ZbnO^/-l,OnQ\#M#o.''                          
+                             ..#x.b.    ."Z#d&oao*+>~M*k*x\''`j                           `+,..M:(\'   !`'j|o:;!,OhMoaWwo*Z_L    -                    
+                               *<`*         ' :x[<W)mMM#h#0*x~;;..'.                      >|m'`J^"f'   ' '\ac#pt|_ftaXoz!#*qak{p^;'o<".               
+                             .^m.'xu'              '.U#*QQn/pcY!X"+.`.'''`'^ .  .'.   ''<-zcJ>JnL,}{     .lco*btnco{ZkcWMdu*d#*x^!i{Jv(               
+                             '#^`^^0a`'               '.`'hpaqhL-w<uUU~+YI>!{`!j!^''_/^fkX0L'0m<ZX)~`.     ]Lq#*|#x}"}}MZiqdajpqakd]". .              
+                             .jaLQ)iikJ.m#?"               ''`"c#odb#cbpdk?/pJU,r|10xkM#*~]?([q*on_\,{.    0|Mo#v1/0:*h-rw[ZI}a\wZ!^vr'`q;'           
+                               1)l'.0`#^'"Q':.                  `..'''`.`>fY0LCU/{<^''<**MMh#LcpkJY1^n?   '|owfpoi*ca(!)*UJ>[drj".'`'`0Q'`r^          
+                                oxUn'W##8hock'                                         '0*dwwnhMOjQU`v?1..'!j,la>%o<qhovY\z8*ofj{`>M".''':."          
+                               ..kk#^^'.i`(hu'                                        .  #xt{p*Jd#|q|:1|{.?'Q*''&fM0#)McMOpW^w0ZQ\C''l#''.`           
+                                  ;>Q.                                                    !+:ha)jW##a0'_:]-t{t!.^*-##aOavv-lc)M]ct1`av'.              
+                                                                                           ' wnr(W[&W+Yf^>`(^.d  .#,**Od+r*.Jk,Q^,o*'{'w              
+                                                                                             .'p?\zz*#O+nZ+x^fx;.'''mn]wi/M<'{#:Jj`U!^u/O^.           
+                                                                                               .'a}nMh##1]'U^" tC., .  !q'''.[d'`,Co()'.j)`           
+                                                                                                  .o?zu|Cor"'u(.Xr}'.   '..`.   `]'^:hh. .J.          
+                                                                                                    "aix}bo&J'Z'.aC`o .          .? .^k?'  '          
+                                                                                                      `o;);Z#q#(!`qY:''               .+'             
+                                                                                                       '.d\r*o-UZU'ZC/                .k              
+                                                                                                         .*t`Xh''JJ"lm                'n.             
+                                                                                                         .'olxt` '#!q/Z.                              
+                                                                                                           ^Q']U` 'Zf )                               
+                                                                                                           '*,';o. `v1'a.'                            
+                                                                                                            .az}(a'.pr''I^                            
+                                                                                                            .'hQ`qLc,q<''m'                           
+                                                                                                              f*#"bZUfUm|kz'.                         
+                                                                                                                `hnp ?'/k  ',O'                       
+                                                                                                                 '`rZp|b1J#'L+d                       
+                                                                                                                      ``  'qnpf                       
+                                                                                                                                                      
         "#;
 
         terminal.draw(|f| {
