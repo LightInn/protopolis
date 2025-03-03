@@ -15,7 +15,7 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::collections::{HashMap, VecDeque};
-use std::io::{self, stdout};
+use std::io::{self, stdout, Stdout};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
@@ -173,6 +173,9 @@ impl UI {
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
 
+        // Render splash screen
+        self.render_splash_screen(&mut terminal)?;
+
         // Show welcome message
         self.messages.push_back(FormattedMessage {
             sender: "System".to_string(),
@@ -204,7 +207,7 @@ impl UI {
                 .unwrap_or_else(|| Duration::from_secs(0));
 
             // Check for events
-            if crossterm::event::poll(timeout)? {
+            if event::poll(timeout)? {
                 if let Event::Key(key) = event::read()? {
                     if key.kind == KeyEventKind::Press {
                         match key.code {
@@ -226,6 +229,8 @@ impl UI {
                             }
                             _ => {}
                         }
+                    } else if let Event::Mouse(_) = event::read()? {
+                        // Ignore mouse events
                     }
                 }
             }
@@ -254,6 +259,8 @@ impl UI {
             }
         }
 
+
+        let _ = self.ui_tx.send(UIToSimulation::Stop);
         // Restore terminal
         disable_raw_mode()?;
         execute!(
@@ -262,6 +269,7 @@ impl UI {
             DisableMouseCapture
         )?;
         terminal.show_cursor()?;
+        
 
         Ok(())
     }
@@ -382,5 +390,40 @@ impl UI {
             List::new(agents).block(Block::default().borders(Borders::ALL).title("Agents"));
 
         f.render_widget(agents_list, area);
+    }
+
+    fn render_splash_screen(&self, terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<(), io::Error> {
+        let splash_text = r#"
+         ____             _        _ _
+        |  _ \ ___  _ __ | |_ __ _| | |_ ___
+        | |_) / _ \| '_ \| __/ _` | | __/ _ \
+        |  __/ (_) | | | | || (_| | | ||  __/
+        |_|   \___/|_| |_|\__\__,_|_|\__\___|
+        "#;
+
+        terminal.draw(|f| {
+            let size = f.size();
+            let block = Block::default().borders(Borders::ALL).title("Welcome");
+            let paragraph = Paragraph::new(splash_text)
+                .block(block)
+                .style(Style::default().fg(Color::Cyan));
+            f.render_widget(paragraph, size);
+        })?;
+
+        // Wait for the space key press to continue
+        loop {
+            if let Event::Key(key) = event::read()? {
+                if key.code == KeyCode::Char(' ') {
+                    break;
+                }
+            }
+        }
+
+        // Clear the input buffer
+        while event::poll(Duration::from_millis(0))? {
+            event::read()?;
+        }
+
+        Ok(())
     }
 }
