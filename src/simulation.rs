@@ -16,20 +16,20 @@ use uuid::Uuid;
 
 /// Enum representing commands from the UI to the simulation
 pub enum UIToSimulation {
-    Start,                          // Start the simulation
-    Pause,                          // Pause the simulation
-    Resume,                         // Resume the simulation
-    Stop,                           // Stop the simulation
-    SetDiscussionTopic(String),     // Set the discussion topic
-    UserMessage(String, String),    // User sends a message to a specific agent
+    Start,                       // Start the simulation
+    Pause,                       // Pause the simulation
+    Resume,                      // Resume the simulation
+    Stop,                        // Stop the simulation
+    SetDiscussionTopic(String),  // Set the discussion topic
+    UserMessage(String, String), // User sends a message to a specific agent
 }
 
 /// Enum representing updates from the simulation to the UI
 pub enum SimulationToUI {
-    TickUpdate(u64),                // Update with the current tick
-    AgentUpdate(String, AgentState, f32),  // Update agent's status and energy
-    MessageUpdate(Message),         // New message update
-    StateUpdate(String),            // Update the simulation's state
+    TickUpdate(u64),                      // Update with the current tick
+    AgentUpdate(String, AgentState, f32), // Update agent's status and energy
+    MessageUpdate(Message),               // New message update
+    StateUpdate(String),                  // Update the simulation's state
 }
 
 /// Main simulation struct
@@ -39,7 +39,7 @@ pub struct Simulation {
     messages: Vec<Message>,
     current_tick: u64,
     running: bool,
-    paused : bool,
+    paused: bool,
     ui_tx: Sender<SimulationToUI>,
     sim_rx: Receiver<UIToSimulation>,
     discussion_topic: Option<String>,
@@ -94,6 +94,7 @@ impl Simulation {
 
     /// Starts the simulation loop, listening for commands and processing the simulation.
     pub fn run(&mut self) {
+        self.running = true;
         // Wait for the start signal
         while let Ok(command) = self.sim_rx.recv() {
             match command {
@@ -113,6 +114,10 @@ impl Simulation {
                 }
                 UIToSimulation::UserMessage(recipient, content) => {
                     self.handle_user_message(&recipient, &content);
+                }
+                UIToSimulation::Stop => {
+                    self.running = false;
+                    break;
                 }
                 _ => continue,
             }
@@ -365,10 +370,9 @@ impl Simulation {
                 // Update the state of other agents
                 for (_, other_agent) in self.agents.iter_mut() {
                     if other_agent.name != agent_name {
-                        other_agent.next_prompt.push_str(&format!(
-                            "[{}→User]: {}\n",
-                            agent_name, response_text
-                        ));
+                        other_agent
+                            .next_prompt
+                            .push_str(&format!("[{}→User]: {}\n", agent_name, response_text));
                     }
                 }
 
@@ -416,7 +420,7 @@ mod tests {
         let (mut simulation, sim_tx, ui_rx) = setup_simulation();
         sim_tx.send(UIToSimulation::Start).unwrap();
 
-        std::thread::spawn(move || {
+        thread::spawn(move || {
             simulation.run();
         });
 
