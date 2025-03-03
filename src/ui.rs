@@ -6,6 +6,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use ratatui::layout::Position;
 use ratatui::prelude::CrosstermBackend;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -18,7 +19,6 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, stdout, Stdout};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
-use ratatui::layout::Position;
 
 // Map of colors for agents
 const COLORS: [Color; 8] = [
@@ -317,7 +317,10 @@ impl UI {
         f.render_widget(input, chunks[2]);
 
         // Set cursor position
-        f.set_cursor_position(Position::new(chunks[2].x + self.input.len() as u16 + 1, chunks[2].y + 1));
+        f.set_cursor_position(Position::new(
+            chunks[2].x + self.input.len() as u16 + 1,
+            chunks[2].y + 1,
+        ));
     }
 
     /// Render the messages panel

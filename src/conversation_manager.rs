@@ -1,7 +1,7 @@
 // conversation_manager.rs
 
-use std::collections::HashMap;
 use crate::message::Message;
+use std::collections::HashMap;
 
 /// Manages conversations between agents by storing message history and active conversations.
 pub struct ConversationManager {
@@ -64,10 +64,7 @@ impl ConversationManager {
             (agent2.to_string(), agent1.to_string())
         };
 
-        self.conversations
-            .get(&key)
-            .cloned()
-            .unwrap_or_default()
+        self.conversations.get(&key).cloned().unwrap_or_default()
     }
 
     /// Checks if an agent is currently engaged in a conversation.
@@ -78,8 +75,8 @@ impl ConversationManager {
     /// # Returns
     /// * `true` if the agent has active conversations, otherwise `false`.
     pub fn is_in_conversation(&self, agent: &str) -> bool {
-        self.active_conversations.contains_key(agent) &&
-            !self.active_conversations[agent].is_empty()
+        self.active_conversations.contains_key(agent)
+            && !self.active_conversations[agent].is_empty()
     }
 
     /// Retrieves the list of active conversation partners for a given agent.

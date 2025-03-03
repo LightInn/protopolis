@@ -1,5 +1,5 @@
-use std::fmt;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// Represents the different states an agent can be in.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
