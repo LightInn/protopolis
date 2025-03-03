@@ -230,10 +230,7 @@ impl UI {
                             }
                             _ => {}
                         }
-                        }
-                    // } else if let Event::Mouse(_) = event::read()? {
-                    //     // Ignore mouse events
-                    // }
+                    }
                 }
             }
 
@@ -261,7 +258,6 @@ impl UI {
             }
         }
 
-
         let _ = self.ui_tx.send(UIToSimulation::Stop);
         // Restore terminal
         disable_raw_mode()?;
@@ -271,7 +267,6 @@ impl UI {
             // DisableMouseCapture
         )?;
         terminal.show_cursor()?;
-
 
         Ok(())
     }
@@ -394,7 +389,10 @@ impl UI {
         f.render_widget(agents_list, area);
     }
 
-    fn render_splash_screen(&self, terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<(), io::Error> {
+    fn render_splash_screen(
+        &self,
+        terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    ) -> Result<(), io::Error> {
         let splash_text = r#"
          ____             _        _ _
         |  _ \ ___  _ __ | |_ __ _| | |_ ___
