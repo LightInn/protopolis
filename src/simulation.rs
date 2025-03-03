@@ -39,6 +39,7 @@ pub struct Simulation {
     messages: Vec<Message>,
     current_tick: u64,
     running: bool,
+    paused : bool,
     ui_tx: Sender<SimulationToUI>,
     sim_rx: Receiver<UIToSimulation>,
     discussion_topic: Option<String>,
@@ -82,6 +83,7 @@ impl Simulation {
             messages: Vec::new(),
             current_tick: 0,
             running: false,
+            paused: false,
             ui_tx,
             sim_rx,
             discussion_topic: None,
@@ -124,9 +126,9 @@ impl Simulation {
             // Check UI commands
             if let Ok(command) = self.sim_rx.try_recv() {
                 match command {
-                    UIToSimulation::Pause => self.running = false,
-                    UIToSimulation::Resume => self.running = true,
-                    UIToSimulation::Stop => break,
+                    UIToSimulation::Pause => self.paused = true,
+                    UIToSimulation::Resume => self.paused = false,
+                    UIToSimulation::Stop => self.running = false,
                     UIToSimulation::SetDiscussionTopic(topic) => {
                         self.discussion_topic = Some(topic.clone());
                         self.start_conversation(&topic);
@@ -136,7 +138,7 @@ impl Simulation {
             }
 
             // If paused, wait
-            if !self.running {
+            if self.paused {
                 thread::sleep(Duration::from_millis(100));
                 continue;
             }
