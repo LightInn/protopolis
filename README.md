@@ -10,7 +10,7 @@
 [![Downloads](https://img.shields.io/crates/d/protopolis?style=for-the-badge)](https://crates.io/crates/protopolis)
 
 <p align="center"> 
-  <img src="showcase/protopolis.gif" width="800" alt="Agents discussing philosophy"> 
+  <img src="showcase/demo.gif" width="800" alt="Agents discussing philosophy"> 
 </p> 
 
 > **⚠️ Warning:** This project is a work in progress (WIP) and will have frequent updates that may break various features.

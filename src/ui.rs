@@ -468,7 +468,7 @@ Yb,  88      `8b                      I8                                        
 
 <Press SPACE to continue>
         "#;
-
+        loop {
         terminal.draw(|f| {
             let size = f.size();
             let block = Block::default().borders(Borders::ALL);
@@ -485,7 +485,7 @@ Yb,  88      `8b                      I8                                        
         })?;
 
         // Wait for the space key press to continue
-        loop {
+     
             if let Event::Key(key) = event::read()? {
                 if key.code == KeyCode::Char(' ') {
                     break;
