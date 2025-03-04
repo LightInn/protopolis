@@ -55,7 +55,6 @@ struct FormattedMessage {
     recipient: String,
     recipient_color: Color,
     content: String,
-    timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 impl UI {
@@ -107,7 +106,6 @@ impl UI {
             recipient: message.recipient.clone(),
             recipient_color,
             content: message.content.to_string().trim_matches('"').to_string(),
-            timestamp: message.timestamp,
         });
 
         self.message_scroll = self.messages.len();
@@ -195,7 +193,6 @@ impl UI {
             recipient: "User".to_string(),
             recipient_color: Color::White,
             content: "Welcome to Protopolis! Type commands below to interact.".to_string(),
-            timestamp: chrono::Utc::now(),
         });
 
         self.messages.push_back(FormattedMessage {
@@ -204,7 +201,6 @@ impl UI {
             recipient: "User".to_string(),
             recipient_color: Color::White,
             content: "Available commands: start, pause, resume, stop, topic <subject>, msg <agent> <message>, exit".to_string(),
-            timestamp: chrono::Utc::now(),
         });
 
         let tick_rate = Duration::from_millis(100);

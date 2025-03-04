@@ -34,7 +34,6 @@ pub enum SimulationToUI {
 
 /// Main simulation struct
 pub struct Simulation {
-    config: Config,
     agents: HashMap<String, Agent>,
     messages: Vec<Message>,
     current_tick: u64,
@@ -67,7 +66,6 @@ impl Simulation {
                 agent_config.name.clone(),
                 personality,
                 agent_config.initial_energy,
-                agent_config.initial_position,
             );
 
             // Set the Ollama model (this could be added to the config later)
@@ -77,7 +75,6 @@ impl Simulation {
         }
 
         Self {
-            config,
             agents,
             messages: Vec::new(),
             current_tick: 0,
