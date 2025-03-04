@@ -1,13 +1,9 @@
 // agent.rs
 
-use crate::message::Message;
 use crate::personality::Personality;
 use crate::state::AgentState;
-use chrono::Utc;
 use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
-use serde_json::json;
-use tokio::runtime::Runtime;
 
 /// Represents an autonomous agent in the simulation.
 #[derive(Debug, Clone)]
@@ -51,7 +47,6 @@ impl Agent {
         name: String,
         personality: Personality,
         initial_energy: f32,
-        initial_position: (i32, i32),
     ) -> Self {
         Self {
             name,

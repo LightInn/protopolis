@@ -1,6 +1,5 @@
 // personality.rs
 
-use rand::Rng;
 
 /// Represents an agent's personality using the Big Five personality traits.
 #[derive(Debug, Clone)]
