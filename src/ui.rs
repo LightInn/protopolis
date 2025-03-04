@@ -8,6 +8,7 @@ use crossterm::{
 };
 use ratatui::layout::{Alignment, Margin, Position};
 use ratatui::prelude::CrosstermBackend;
+use ratatui::widgets::{Padding, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
@@ -19,7 +20,6 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, stdout, Stdout};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
-use ratatui::widgets::{Padding, Scrollbar, ScrollbarOrientation, ScrollbarState};
 
 // Map of colors for agents
 const COLORS: [Color; 8] = [
@@ -109,7 +109,8 @@ impl UI {
         });
 
         self.message_scroll = self.messages.len();
-        self.message_scroll_state = self.message_scroll_state
+        self.message_scroll_state = self
+            .message_scroll_state
             .content_length(self.messages.len())
             .position(self.message_scroll);
 
@@ -234,23 +235,26 @@ impl UI {
                             }
                             KeyCode::Esc => {
                                 self.should_quit = true;
-                            },
+                            }
                             KeyCode::PageUp => {
                                 self.message_scroll = self.message_scroll.saturating_sub(10);
-                                self.message_scroll_state = self.message_scroll_state.position(self.message_scroll);
-                            },
+                                self.message_scroll_state =
+                                    self.message_scroll_state.position(self.message_scroll);
+                            }
                             KeyCode::PageDown => {
                                 self.message_scroll = self.message_scroll.saturating_add(10);
-                                self.message_scroll_state = self.message_scroll_state.position(self.message_scroll);
-                            },
+                                self.message_scroll_state =
+                                    self.message_scroll_state.position(self.message_scroll);
+                            }
                             KeyCode::Home => {
                                 self.message_scroll = 0;
                                 self.message_scroll_state = self.message_scroll_state.position(0);
-                            },
+                            }
                             KeyCode::End => {
                                 self.message_scroll = self.messages.len();
-                                self.message_scroll_state = self.message_scroll_state.position(self.message_scroll);
-                            },
+                                self.message_scroll_state =
+                                    self.message_scroll_state.position(self.message_scroll);
+                            }
                             _ => {}
                         }
                     }
@@ -391,8 +395,15 @@ impl UI {
                     .orientation(ScrollbarOrientation::VerticalRight)
                     .begin_symbol(Some("↑"))
                     .end_symbol(Some("↓")),
-                area.inner(Margin { vertical: 1, horizontal: 0 }),
-                &mut self.message_scroll_state.clone().content_length(content_height).position(scroll)
+                area.inner(Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
+                &mut self
+                    .message_scroll_state
+                    .clone()
+                    .content_length(content_height)
+                    .position(scroll),
             );
         }
     }
@@ -464,23 +475,23 @@ Yb,  88      `8b                      I8                                        
 <Press SPACE to continue>
         "#;
         loop {
-        terminal.draw(|f| {
-            let size = f.area();
-            let block = Block::default().borders(Borders::ALL);
-            let paragraph = Paragraph::new(splash_text)
-                .block(block.padding(Padding::new(
-                    0, // left
-                    0, // right
-                    size.height / 4, // top
-                    0, // bottom
-                )))
-                .style(Style::default().fg(Color::LightYellow).bg(Color::Black))
-                .alignment(Alignment::Center);
-            f.render_widget(paragraph, size);
-        })?;
+            terminal.draw(|f| {
+                let size = f.area();
+                let block = Block::default().borders(Borders::ALL);
+                let paragraph = Paragraph::new(splash_text)
+                    .block(block.padding(Padding::new(
+                        0,               // left
+                        0,               // right
+                        size.height / 4, // top
+                        0,               // bottom
+                    )))
+                    .style(Style::default().fg(Color::LightYellow).bg(Color::Black))
+                    .alignment(Alignment::Center);
+                f.render_widget(paragraph, size);
+            })?;
 
-        // Wait for the space key press to continue
-     
+            // Wait for the space key press to continue
+
             if let Event::Key(key) = event::read()? {
                 if key.code == KeyCode::Char(' ') {
                     break;
