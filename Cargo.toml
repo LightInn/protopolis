@@ -3,11 +3,11 @@ name = "protopolis"
 version = "0.3.2"
 edition = "2021"
 authors = ["LightInn"]
-description = "A simple, fast, and secure chat server."
+description = "A multi-agent Ollama simulation in Rust"
 repository = "https://github.com/LightInn/protopolis"
 license = "MIT"
 readme = "README.md"
-keywords = ["Ollama", "AI-agent", "simulation", "simple"]
+keywords = ["Ollama", "AI", "simulation", "CLI", "multi-agent"]
 categories = ["simulation"]
 
 [dependencies]
