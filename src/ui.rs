@@ -6,7 +6,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::layout::Position;
+use ratatui::layout::{Alignment, Margin, Position};
 use ratatui::prelude::CrosstermBackend;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -19,6 +19,8 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, stdout, Stdout};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
+use color_eyre::owo_colors::OwoColorize;
+use ratatui::widgets::{Padding, Scrollbar, ScrollbarOrientation, ScrollbarState};
 
 // Map of colors for agents
 const COLORS: [Color; 8] = [
@@ -43,6 +45,8 @@ pub struct UI {
     simulation_status: String,
     current_tick: u64,
     should_quit: bool,
+    message_scroll: usize,
+    message_scroll_state: ScrollbarState,
 }
 
 /// A formatted message with sender/recipient information
@@ -68,6 +72,8 @@ impl UI {
             simulation_status: "Waiting to start".to_string(),
             current_tick: 0,
             should_quit: false,
+            message_scroll: 0,
+            message_scroll_state: ScrollbarState::default(),
         }
     }
 
@@ -104,6 +110,11 @@ impl UI {
             content: message.content.to_string().trim_matches('"').to_string(),
             timestamp: message.timestamp,
         });
+
+        self.message_scroll = self.messages.len();
+        self.message_scroll_state = self.message_scroll_state
+            .content_length(self.messages.len())
+            .position(self.message_scroll);
 
         // Keep message history limited
         if self.messages.len() > 100 {
@@ -228,7 +239,23 @@ impl UI {
                             }
                             KeyCode::Esc => {
                                 self.should_quit = true;
-                            }
+                            },
+                            KeyCode::PageUp => {
+                                self.message_scroll = self.message_scroll.saturating_sub(10);
+                                self.message_scroll_state = self.message_scroll_state.position(self.message_scroll);
+                            },
+                            KeyCode::PageDown => {
+                                self.message_scroll = self.message_scroll.saturating_add(10);
+                                self.message_scroll_state = self.message_scroll_state.position(self.message_scroll);
+                            },
+                            KeyCode::Home => {
+                                self.message_scroll = 0;
+                                self.message_scroll_state = self.message_scroll_state.position(0);
+                            },
+                            KeyCode::End => {
+                                self.message_scroll = self.messages.len();
+                                self.message_scroll_state = self.message_scroll_state.position(self.message_scroll);
+                            },
                             _ => {}
                         }
                     }
@@ -325,31 +352,54 @@ impl UI {
 
     /// Render the messages panel
     fn render_messages_panel(&self, f: &mut Frame, area: Rect) {
-        let messages: Vec<ListItem> = self
-            .messages
-            .iter()
-            .map(|m| {
-                let content = Line::from(vec![
-                    Span::styled(
-                        format!("[{}] ", m.sender),
-                        Style::default().fg(m.sender_color),
-                    ),
-                    Span::raw("to "),
-                    Span::styled(
-                        format!("[{}]: ", m.recipient),
-                        Style::default().fg(m.recipient_color),
-                    ),
-                    Span::raw(&m.content),
-                ]);
-                ListItem::new(content)
-            })
-            .collect();
+        // Create message content with proper text wrapping
+        let mut text = Vec::new();
+        for m in &self.messages {
+            // Header line with sender and recipient
+            text.push(Line::from(vec![
+                Span::styled(
+                    format!("[{}]", m.sender),
+                    Style::default().fg(m.sender_color),
+                ),
+                Span::raw(" to "),
+                Span::styled(
+                    format!("[{}]:", m.recipient),
+                    Style::default().fg(m.recipient_color),
+                ),
+            ]));
 
-        let messages_list = List::new(messages)
+            // Content line with automatic wrapping
+            text.push(Line::from(Span::raw(&m.content)));
+
+            // Empty line as separator
+            text.push(Line::from(""));
+        }
+
+        // Calculate appropriate scroll position
+        let content_height = text.len();
+        let viewport_height = area.height.saturating_sub(2) as usize; // -2 for borders
+        let max_scroll = content_height.saturating_sub(viewport_height);
+        let scroll = self.message_scroll.min(max_scroll);
+
+        // Render the message content with scroll applied
+        let messages_widget = Paragraph::new(text)
             .block(Block::default().borders(Borders::ALL).title("Messages"))
-            .highlight_style(Style::default().fg(Color::Black).bg(Color::White));
+            .wrap(ratatui::widgets::Wrap { trim: true })
+            .scroll((scroll as u16, 0));
 
-        f.render_widget(messages_list, area);
+        f.render_widget(messages_widget, area);
+
+        // Render the scrollbar if content exceeds viewport
+        if content_height > viewport_height {
+            f.render_stateful_widget(
+                Scrollbar::default()
+                    .orientation(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(Some("↑"))
+                    .end_symbol(Some("↓")),
+                area.inner(Margin { vertical: 1, horizontal: 0 }),
+                &mut self.message_scroll_state.clone().content_length(content_height).position(scroll)
+            );
+        }
     }
 
     /// Render the agent states panel
@@ -398,68 +448,39 @@ impl UI {
         terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ) -> Result<(), io::Error> {
         let splash_text = r#"
-                                                                                                                                                      
-                                                                                                                                                      
-                                                                                                                                                      
-                                                                                                                                                      
-                                    ^:cQJ/.                                                                                                           
-                           .`^' ..tM}';>:n*d                                                                                                          
-                   'L{.vZ.\wdk!I0Jq(\[#XkpZf:}vqI''')~'I'.                                                                                            
-                   'nd*fc+caMLkhooM#*x-#[/kc{}ZktU0JJ?p'   ''(.                                                                                       
-                    ~*#'MC?LhMpUj/<'~k|v*t-(0:Zfq{rooMwOzcoIa'^..                                                                                     
-                    'kt+.`'1#ba|. ..`''`!qd/ld]Z_0J#*mu(b**mm?~`.'!`                                                                                  
-                 '''x'c'+'I'^.C;'`'.   .'"_<Q>lrao_'^o#1##QkMkdZZC`'.                                                                                 
-               '''] '.``b~jj>'Z"Ipl?.'..`     <nj`"|J)bXoMMMw-Yo<j":0'                                                                                
-                'u.^)pU#ooZ^'XMoLX?`(,!i,``    .'.>'`'zf1hW#_])jhh~)''                                                                                
-               .<'.'h-,.q:   ,*(oooLW;I`:'';          .''n}0~[hM/^``'L`                                                                               
-              .':  ^.':'`'   >1mZJILaofwfr^I'^.'.         _'^>)z}~,^                                                                                  
-              -. '.Umq''   '}YkkLacr_'vhn]+O^`xn]."'''         _)0xJ''                                                                                
-            'm^''fa<+' .'`':*#' ..-MXo}'l??Lkc.:`              '^^{l`k'                                                                               
-          '']`  \v.`' .U|I>d`.'   ''I/d1`'O[m?'           `""|/``"~. .'p'                                                                             
-          lM{i`-<`c`,\-0,''          .Xa1z0ux,'Y;'^  'j<.'.    `^] '   ' ;k'                                                                          
-          "dza*/L>%w'''               '^Mmw}M;`'.   0]''          '||,.   .,^<0BY,`                                                                   
-          'Xp*o*qX.''                   kWap`^     `..     '/i'l/t>w`'      ''.'':!<x}o#n`                                                            
-          .' ''/X''                    '0##X'.   '.<:^.''  ..'1`^"I.               '  .'''x1rYb*?  '                                                  
-                                   .^  ..ahkU^'^.`_:Q        .'.''.                       .''. .<C+o ``.`' .`'.`                                      
-                               `'.o`])`':Y**M*hx}(>,`     `.``0t^                          ._''   '^mCo+ZX#w/fdt'..                                   
-                               `uf.ioaamkI.''^zJ:jl|,'  'urU*0n''                           '!f`' ..'Ubboz,q-{xZCIq'' '                               
-                               ZXMz0#o#o*|>!La|r~x`   ''Cq0a1;`                              1(. '    i,Qj{Cl,?C,}f0MMl^'.                            
-                              'La`x]d#kcpooZdpaw``^''-:w#pw``''                              `:[^.'.  '/ZbnO^/-l,OnQ\#M#o.''                          
-                             ..#x.b.    ."Z#d&oao*+>~M*k*x\''`j                           `+,..M:(\'   !`'j|o:;!,OhMoaWwo*Z_L    -                    
-                               *<`*         ' :x[<W)mMM#h#0*x~;;..'.                      >|m'`J^"f'   ' '\ac#pt|_ftaXoz!#*qak{p^;'o<".               
-                             .^m.'xu'              '.U#*QQn/pcY!X"+.`.'''`'^ .  .'.   ''<-zcJ>JnL,}{     .lco*btnco{ZkcWMdu*d#*x^!i{Jv(               
-                             '#^`^^0a`'               '.`'hpaqhL-w<uUU~+YI>!{`!j!^''_/^fkX0L'0m<ZX)~`.     ]Lq#*|#x}"}}MZiqdajpqakd]". .              
-                             .jaLQ)iikJ.m#?"               ''`"c#odb#cbpdk?/pJU,r|10xkM#*~]?([q*on_\,{.    0|Mo#v1/0:*h-rw[ZI}a\wZ!^vr'`q;'           
-                               1)l'.0`#^'"Q':.                  `..'''`.`>fY0LCU/{<^''<**MMh#LcpkJY1^n?   '|owfpoi*ca(!)*UJ>[drj".'`'`0Q'`r^          
-                                oxUn'W##8hock'                                         '0*dwwnhMOjQU`v?1..'!j,la>%o<qhovY\z8*ofj{`>M".''':."          
-                               ..kk#^^'.i`(hu'                                        .  #xt{p*Jd#|q|:1|{.?'Q*''&fM0#)McMOpW^w0ZQ\C''l#''.`           
-                                  ;>Q.                                                    !+:ha)jW##a0'_:]-t{t!.^*-##aOavv-lc)M]ct1`av'.              
-                                                                                           ' wnr(W[&W+Yf^>`(^.d  .#,**Od+r*.Jk,Q^,o*'{'w              
-                                                                                             .'p?\zz*#O+nZ+x^fx;.'''mn]wi/M<'{#:Jj`U!^u/O^.           
-                                                                                               .'a}nMh##1]'U^" tC., .  !q'''.[d'`,Co()'.j)`           
-                                                                                                  .o?zu|Cor"'u(.Xr}'.   '..`.   `]'^:hh. .J.          
-                                                                                                    "aix}bo&J'Z'.aC`o .          .? .^k?'  '          
-                                                                                                      `o;);Z#q#(!`qY:''               .+'             
-                                                                                                       '.d\r*o-UZU'ZC/                .k              
-                                                                                                         .*t`Xh''JJ"lm                'n.             
-                                                                                                         .'olxt` '#!q/Z.                              
-                                                                                                           ^Q']U` 'Zf )                               
-                                                                                                           '*,';o. `v1'a.'                            
-                                                                                                            .az}(a'.pr''I^                            
-                                                                                                            .'hQ`qLc,q<''m'                           
-                                                                                                              f*#"bZUfUm|kz'.                         
-                                                                                                                `hnp ?'/k  ',O'                       
-                                                                                                                 '`rZp|b1J#'L+d                       
-                                                                                                                      ``  'qnpf                       
-                                                                                                                                                      
+ ,ggggggggggg,                                                                                          
+dP"""88""""""Y8,                      I8                                          ,dPYb,                
+Yb,  88      `8b                      I8                                          IP'`Yb                
+ `"  88      ,8P                   88888888                                       I8  8I  gg            
+     88aaaad8P"                       I8                                          I8  8'  ""            
+     88"""""   ,gggggg,    ,ggggg,    I8      ,ggggg,    gg,gggg,      ,ggggg,    I8 dP   gg     ,g,    
+     88        dP""""8I   dP"  "Y8ggg I8     dP"  "Y8ggg I8P"  "Yb    dP"  "Y8ggg I8dP    88    ,8'8,   
+     88       ,8'    8I  i8'    ,8I  ,I8,   i8'    ,8I   I8'    ,8i  i8'    ,8I   I8P     88   ,8'  Yb  
+     88      ,dP     Y8,,d8,   ,d8' ,d88b, ,d8,   ,d8'  ,I8 _  ,d8' ,d8,   ,d8'  ,d8b,_ _,88,_,8'_   8) 
+     88      8P      `Y8P"Y8888P"  88P""Y88P"Y8888P"    PI8 YY88888PP"Y8888P"    8P'"Y888P""Y8P' "YY8P8P
+                                                         I8                                             
+                                                         I8                                             
+                                                         I8                                             
+                                                         I8                                             
+                                                         I8                                             
+                                                         I8                                             
+
+
+<Press SPACE to continue>
         "#;
 
         terminal.draw(|f| {
             let size = f.size();
-            let block = Block::default().borders(Borders::ALL).title("Welcome");
+            let block = Block::default().borders(Borders::ALL);
             let paragraph = Paragraph::new(splash_text)
-                .block(block)
-                .style(Style::default().fg(Color::Cyan));
+                .block(block.padding(Padding::new(
+                    0, // left
+                    0, // right
+                    size.height / 4, // top
+                    0, // bottom
+                )))
+                .style(Style::default().fg(Color::LightYellow).bg(Color::Black))
+                .alignment(Alignment::Center);
             f.render_widget(paragraph, size);
         })?;
 
