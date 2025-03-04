@@ -8,7 +8,6 @@ use ollama_rs::Ollama;
 /// Represents an autonomous agent in the simulation.
 #[derive(Debug, Clone)]
 pub struct Agent {
-
     /// Agent's display name.
     pub name: String,
 
@@ -43,11 +42,7 @@ impl Agent {
     ///
     /// # Returns
     /// * A new `Agent` instance.
-    pub fn new(
-        name: String,
-        personality: Personality,
-        initial_energy: f32,
-    ) -> Self {
+    pub fn new(name: String, personality: Personality, initial_energy: f32) -> Self {
         Self {
             name,
             state: AgentState::Idle,
