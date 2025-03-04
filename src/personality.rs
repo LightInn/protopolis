@@ -48,22 +48,6 @@ impl Personality {
             neuroticism,
         }
     }
-
-    /// Influences a decision based on personality traits.
-    ///
-    /// # Arguments
-    /// * `options` - A list of possible choices.
-    ///
-    /// # Returns
-    /// * The index of the chosen option, influenced by randomness.
-    ///
-    /// # TODO:
-    /// - Improve decision logic to be influenced by personality traits.
-    /// - Example: A more extraverted agent might favor social choices.
-    pub fn influence_decision(&self, options: &[String]) -> usize {
-        let mut rng = rand::rng();
-        rng.random_range(0..options.len())
-    }
 }
 
 /// Generates a personality based on a predefined template.

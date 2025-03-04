@@ -19,7 +19,6 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, stdout, Stdout};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
-use color_eyre::owo_colors::OwoColorize;
 use ratatui::widgets::{Padding, Scrollbar, ScrollbarOrientation, ScrollbarState};
 
 // Map of colors for agents
@@ -470,7 +469,7 @@ Yb,  88      `8b                      I8                                        
         "#;
         loop {
         terminal.draw(|f| {
-            let size = f.size();
+            let size = f.area();
             let block = Block::default().borders(Borders::ALL);
             let paragraph = Paragraph::new(splash_text)
                 .block(block.padding(Padding::new(

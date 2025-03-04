@@ -64,7 +64,6 @@ impl Simulation {
             let personality = get_personality_template(&agent_config.personality_template);
 
             let mut agent = Agent::new(
-                id.clone(),
                 agent_config.name.clone(),
                 personality,
                 agent_config.initial_energy,
@@ -279,15 +278,7 @@ impl Simulation {
     /// Starts the conversation with a given topic.
     fn start_conversation(&mut self, topic: &str) {
         // Choose an agent to start the conversation
-        if let Some((starter_id, starter)) = self.agents.iter().next() {
-            // Choose a random recipient different from the sender
-            let recipient = self
-                .agents
-                .iter()
-                .find(|(id, _)| *id != starter_id)
-                .map(|(_, agent)| agent.name.clone())
-                .unwrap_or_else(|| "everyone".to_string());
-
+        if let Some((_, starter)) = self.agents.iter().next() {
             // Create an initial message
             let initial_message = Message {
                 id: Uuid::new_v4().to_string(),
