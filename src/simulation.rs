@@ -65,7 +65,7 @@ impl Simulation {
             let mut agent = Agent::new(
                 agent_config.name.clone(),
                 personality,
-                agent_config.initial_energy,
+                agent_config.initial_energy as f32,
             );
 
             // Set the Ollama model (this could be added to the config later)

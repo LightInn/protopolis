@@ -17,15 +17,32 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Load configuration file
     let config_path = Path::new("config.json");
     let config = match Config::load(config_path) {
         Ok(config) => config,
-        Err(e) => {
-            eprintln!("Error loading configuration: {}", e);
-            let config = config::Config::default();
-            let _ = config.save(Path::new("config.json"));
+        Err(_) => {
+            println!("Configuration non trouvée. Création d'une nouvelle configuration...");
+            let mut config = Config::default();
+            
+            // Sélection du modèle
+            match Config::select_model().await {
+                Ok(model) => {
+                    config.model = model;
+                    println!("Modèle sélectionné avec succès!");
+                }
+                Err(e) => {
+                    eprintln!("Erreur lors de la sélection du modèle: {}", e);
+                    println!("Utilisation du modèle par défaut (llama2)");
+                }
+            }
+
+            // Sauvegarde de la configuration
+            if let Err(e) = config.save(config_path) {
+                eprintln!("Erreur lors de la sauvegarde de la configuration: {}", e);
+            }
             config
         }
     };
@@ -48,6 +65,6 @@ fn main() {
 
     // Wait for the simulation thread to finish
     if let Err(e) = simulation_thread.join() {
-        eprintln!("Error joining the simulation thread: {:?}", e);
+        eprintln!("Error in simulation thread: {:?}", e);
     }
 }

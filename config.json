@@ -34,5 +34,6 @@
       ]
     }
   ],
-  "debug": true
+  "debug": true,
+  "model": "llama3.2:latest"
 }
