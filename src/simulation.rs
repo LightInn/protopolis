@@ -58,18 +58,21 @@ impl Simulation {
 
         // Initialize agents based on configuration
         let mut agents = HashMap::new();
+        let ollama_model_name = config.ollama_model.clone().unwrap_or_else(|| {
+            eprintln!("Warning: Ollama model not found in config, using default.");
+            "llama3.2:latest".to_string() // Fallback to a default if not in config
+        });
+
         for agent_config in &config.agents {
             let id = Uuid::new_v4().to_string();
             let personality = get_personality_template(&agent_config.personality_template);
 
-            let mut agent = Agent::new(
+            let agent = Agent::new(
                 agent_config.name.clone(),
                 personality,
                 agent_config.initial_energy,
+                ollama_model_name.clone(), // Pass the model name from config
             );
-
-            // Set the Ollama model (this could be added to the config later)
-            agent.set_model("llama3.2:latest".to_string());
 
             agents.insert(id, agent);
         }

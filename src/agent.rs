@@ -39,17 +39,18 @@ impl Agent {
     /// * `personality` - Personality traits of the agent.
     /// * `initial_energy` - Starting energy level.
     /// * `initial_position` - Initial (x, y) coordinates.
+    /// * `ollama_model` - The Ollama model to be used by the agent.
     ///
     /// # Returns
     /// * A new `Agent` instance.
-    pub fn new(name: String, personality: Personality, initial_energy: f32) -> Self {
+    pub fn new(name: String, personality: Personality, initial_energy: f32, ollama_model: String) -> Self {
         Self {
             name,
             state: AgentState::Idle,
             energy: initial_energy,
             personality,
             conversation_history: Vec::new(),
-            ollama_model: "llama3.2:latest".to_string(), // Default model
+            ollama_model, // Use the provided model
             next_prompt: String::new(),
         }
     }
