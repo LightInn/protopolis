@@ -16,6 +16,9 @@ pub struct Config {
 
     /// Debug mode flag (enables additional logging and debugging features).
     pub debug: bool,
+
+    /// The Ollama model to use.
+    pub ollama_model: Option<String>,
 }
 
 /// Defines the world parameters for the simulation.
@@ -81,6 +84,7 @@ impl Config {
                 },
             ],
             debug: true,
+            ollama_model: None,
         }
     }
 
