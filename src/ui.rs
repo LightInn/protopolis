@@ -255,6 +255,16 @@ impl UI {
                                 self.message_scroll_state =
                                     self.message_scroll_state.position(self.message_scroll);
                             }
+                            KeyCode::Up => {
+                                self.message_scroll = self.message_scroll.saturating_sub(1);
+                                self.message_scroll_state =
+                                    self.message_scroll_state.position(self.message_scroll);
+                            }
+                            KeyCode::Down => {
+                                self.message_scroll = self.message_scroll.saturating_add(1);
+                                self.message_scroll_state =
+                                    self.message_scroll_state.position(self.message_scroll);
+                            }
                             _ => {}
                         }
                     }
