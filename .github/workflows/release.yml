@@ -75,7 +75,7 @@ jobs:
           Compress-Archive -Path release-windows\* -DestinationPath release-windows.zip
 
       - name: Upload Windows Build
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: windows-build
           path: release-windows.zip
@@ -122,7 +122,7 @@ jobs:
           tar -czvf release-linux.tar.gz release-linux/
 
       - name: Upload Linux Build
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: linux-build
           path: release-linux.tar.gz
@@ -135,13 +135,13 @@ jobs:
       VERSION: ${{ needs.update-version.outputs.version }}
     steps:
       - name: Download Windows Build
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: windows-build
           path: ./artifacts
 
       - name: Download Linux Build
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: linux-build
           path: ./artifacts
