@@ -25,7 +25,7 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Setup Rust (MSVC)
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable
           components: rust-src

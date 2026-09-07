@@ -54,7 +54,7 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Setup Rust (MSVC)
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable
           components: rust-src
@@ -101,7 +101,7 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable
           components: rust-src
@@ -169,7 +169,7 @@ jobs:
           ref: main  # Pull the latest main with version update
 
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable
           components: rust-src
